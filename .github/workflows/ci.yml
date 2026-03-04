@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: nexus_test
+          POSTGRES_USER: nexus_test
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: |
+          uv venv
+          uv pip install -r requirements.txt
+          uv pip install pytest pytest-cov pytest-asyncio mypy ruff
+
+      - name: Lint with ruff
+        run: |
+          source .venv/bin/activate
+          ruff check src/ scripts/ tests/
+          ruff format --check src/ scripts/ tests/
+
+      - name: Type check with mypy
+        run: |
+          source .venv/bin/activate
+          mypy src/ --ignore-missing-imports
+
+      - name: Generate synthetic data
+        run: |
+          source .venv/bin/activate
+          python scripts/generators/generate_messy_logistics.py --rows 500 --seed 42 --ground-truth
+
+      - name: Run unit tests
+        run: |
+          source .venv/bin/activate
+          pytest tests/unit/ -v --tb=short --cov=src --cov-report=xml
+
+      - name: Run integration tests
+        if: matrix.python-version == '3.11'
+        env:
+          DATABASE_URL: postgresql://nexus_test:test_password@localhost:5432/nexus_test
+        run: |
+          source .venv/bin/activate
+          pytest tests/integration/ -v --tb=short -m "not llm"

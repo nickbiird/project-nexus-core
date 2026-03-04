@@ -1,0 +1,17 @@
+# Yellowbird Telemetry — Audit Dashboard Dependencies
+# Install: pip install -r requirements.txt
+
+# Core data processing
+pandas>=2.1.0,<3.0
+numpy>=1.24.0,<2.0
+openpyxl>=3.1.0            # Excel file support (.xlsx)
+
+# Entity clustering
+rapidfuzz>=3.5.0,<4.0      # Fast fuzzy string matching
+
+# Web app
+streamlit>=1.30.0,<2.0     # Dashboard framework
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0

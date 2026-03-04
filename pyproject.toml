@@ -1,0 +1,144 @@
+[project]
+name = "project-nexus-core"
+version = "0.1.0"
+description = "LLM-Augmented ETL & Conversational BI for SMB Margin Recovery"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [
+    { name = "Project Nexus", email = "founder@projectnexus.dev" },
+]
+keywords = ["etl", "llm", "data-engineering", "whatsapp", "text-to-sql", "margin-recovery"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Database :: Front-Ends",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    # --- Core Data Engineering ---
+    "pandas>=2.2.0,<3.0",
+    "openpyxl>=3.1.2",                    # Excel read/write
+    "xlsxwriter>=3.2.0",                  # Excel output with formatting
+    "numpy>=1.26.0,<2.0",
+
+    # --- Data Profiling & Quality ---
+    "ydata-profiling>=4.6.0",             # Automated EDA / data profiling
+    "great-expectations>=0.18.0",         # Data validation framework
+
+    # --- Entity Resolution & Fuzzy Matching ---
+    "rapidfuzz>=3.6.0",                   # Fast fuzzy string matching (C++ backend)
+    "python-Levenshtein>=0.25.0",         # Levenshtein distance acceleration
+    "unidecode>=1.3.8",                   # Unicode → ASCII transliteration (Martinez/Martínez)
+
+    # --- Database ---
+    "sqlalchemy>=2.0.25",                 # ORM + connection management
+    "psycopg2-binary>=2.9.9",            # PostgreSQL driver
+    "alembic>=1.13.0",                    # Schema migrations
+    "sqlglot>=23.0.0",                    # SQL parsing, validation, transpilation
+
+    # --- LLM Integration ---
+    "openai>=1.12.0",                     # GPT-4o API client
+    "anthropic>=0.18.0",                  # Claude API client (fallback)
+    "tiktoken>=0.6.0",                    # Token counting for cost tracking
+
+    # --- Web Framework & API ---
+    "fastapi>=0.109.0",                   # WhatsApp webhook receiver
+    "uvicorn[standard]>=0.27.0",          # ASGI server
+    "httpx>=0.27.0",                      # Async HTTP client (WhatsApp API calls)
+    "pydantic>=2.6.0",                    # Request/response validation
+    "pydantic-settings>=2.1.0",           # Settings management from .env
+
+    # --- Dashboard ---
+    "streamlit>=1.31.0",                  # Audit dashboard UI
+    "plotly>=5.18.0",                     # Interactive charts
+    "altair>=5.2.0",                      # Declarative visualization
+
+    # --- Synthetic Data Generation ---
+    "faker>=22.0.0",                      # Realistic fake data generation
+
+    # --- Utilities ---
+    "python-dotenv>=1.0.1",              # .env file loading
+    "structlog>=24.1.0",                  # Structured logging
+    "rich>=13.7.0",                       # Terminal formatting
+    "click>=8.1.7",                       # CLI framework
+    "tenacity>=8.2.3",                    # Retry logic for API calls
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.23.0",
+    "mypy>=1.8.0",
+    "ruff>=0.2.0",
+    "pre-commit>=3.6.0",
+    "ipython>=8.21.0",
+]
+ocr = [
+    "pytesseract>=0.3.10",               # OCR for PDF invoices
+    "pdf2image>=1.17.0",                  # PDF → image for OCR pipeline
+    "Pillow>=10.2.0",
+]
+
+[project.scripts]
+nexus-generate = "scripts.generators.generate_messy_logistics:main"
+nexus-profile = "src.etl.profilers.excel_profiler:main"
+nexus-dashboard = "dashboard.app:main"
+nexus-api = "api.main:main"
+
+[build-system]
+requires = ["setuptools>=69.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[tool.setuptools.packages.find]
+include = ["src*", "scripts*", "dashboard*", "api*"]
+
+# --- Ruff (Linter + Formatter) ---
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+fix = true
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "ANN",    # flake8-annotations
+    "S",      # flake8-bandit (security)
+    "T20",    # flake8-print
+    "SIM",    # flake8-simplify
+    "RUF",    # Ruff-specific rules
+]
+ignore = ["ANN101", "ANN102"]  # self/cls annotation
+
+[tool.ruff.lint.isort]
+known-first-party = ["src", "scripts", "dashboard", "api"]
+
+# --- Mypy (Type Checking) ---
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+
+# --- Pytest ---
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+addopts = "--strict-markers --tb=short -q"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests requiring database or API access",
+    "llm: marks tests requiring LLM API calls",
+]
