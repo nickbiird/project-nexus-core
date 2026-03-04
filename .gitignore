@@ -1,0 +1,122 @@
+# ============================================================================
+# PROJECT NEXUS — .gitignore
+# CRITICAL: This file prevents leaking client data, API keys, and secrets.
+# Review any changes to this file with extreme caution.
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# CLIENT DATA — ABSOLUTE EXCLUSION (GDPR / Data Residency Compliance)
+# ---------------------------------------------------------------------------
+data/client/
+data/uploads/
+data/raw/
+data/processed/
+*.client.*
+*_client_*
+*_real_*
+audit_results/
+client_exports/
+
+# ---------------------------------------------------------------------------
+# SECRETS & CREDENTIALS
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.p12
+secrets/
+credentials/
+service_account*.json
+*_credentials.json
+*_secret*.json
+
+# ---------------------------------------------------------------------------
+# PYTHON
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+eggs/
+.eggs/
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.venv/
+venv/
+env/
+.python-version
+
+# Type checking / linting caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ---------------------------------------------------------------------------
+# IDE & EDITOR
+# ---------------------------------------------------------------------------
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------------------
+# DATABASE
+# ---------------------------------------------------------------------------
+*.sql.bak
+*.dump
+*.pgdump
+db_backups/
+*.sqlite3
+*.db
+
+# ---------------------------------------------------------------------------
+# INFRASTRUCTURE & DEPLOYMENT
+# ---------------------------------------------------------------------------
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
+*.tfvars
+!*.tfvars.example
+
+# Docker
+docker-compose.override.yml
+
+# ---------------------------------------------------------------------------
+# LOGS & TEMPORARY FILES
+# ---------------------------------------------------------------------------
+logs/
+*.log
+tmp/
+temp/
+.cache/
+
+# ---------------------------------------------------------------------------
+# GENERATED OUTPUTS (large files)
+# ---------------------------------------------------------------------------
+data/sample_outputs/*.xlsx
+data/sample_outputs/*.pdf
+!data/sample_outputs/.gitkeep
+
+# ---------------------------------------------------------------------------
+# LLM / AI ARTIFACTS
+# ---------------------------------------------------------------------------
+.llm_cache/
+prompt_logs/
+token_usage/
