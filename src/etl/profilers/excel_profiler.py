@@ -506,7 +506,7 @@ def compute_completeness_score(df: pd.DataFrame) -> float:
     if total_cells == 0:
         return 0.0
     null_cells = int(df.isna().sum().sum())
-    return round((1 - null_cells / total_cells) * 100, 2)
+    return float(round((1 - null_cells / total_cells) * 100, 2))
 
 
 def compute_consistency_score(profiles: list[ColumnProfile]) -> float:
