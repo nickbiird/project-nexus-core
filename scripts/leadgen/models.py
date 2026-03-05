@@ -54,7 +54,18 @@ CSV_HEADERS: list[str] = [
     "CNAE Primary",
     "CNAE Secondary",
     "Source",
+    # ── Scoring fields ──
+    "Score",
+    "Tier",
 ]
+
+
+def _parse_tier(val: str) -> Tier:
+    """Parse a Tier string back to its enum value, defaulting to TIER_3."""
+    for t in Tier:
+        if t.value.lower() == val.strip().lower():
+            return t
+    return Tier.TIER_3
 
 
 @dataclass(frozen=True)
@@ -88,6 +99,9 @@ class Lead:
     cnae_primary: str = field(default="")
     cnae_secondary: str = field(default="")
     source: str = field(default="apollo")
+    # ── Scoring fields (default so all existing callers stay valid) ──
+    score: int = field(default=0)
+    tier: Tier = field(default=Tier.TIER_3)
 
     def to_row(self) -> list[str]:
         """Return a list matching CSV_HEADERS order."""
@@ -120,6 +134,9 @@ class Lead:
             self.cnae_primary,
             self.cnae_secondary,
             self.source,
+            # Scoring fields
+            str(self.score),
+            str(self.tier),
         ]
 
     @classmethod
@@ -175,6 +192,9 @@ class Lead:
             cnae_primary=row.get("CNAE Primary", ""),
             cnae_secondary=row.get("CNAE Secondary", ""),
             source=row.get("Source", "apollo"),
+            # Scoring fields
+            score=get_int(row.get("Score")),
+            tier=_parse_tier(row.get("Tier", "")),
         )
 
 

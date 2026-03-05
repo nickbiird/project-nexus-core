@@ -2,13 +2,52 @@
 Lead priority scoring logic.
 """
 
+from __future__ import annotations
+
+import dataclasses
 import functools
 import logging
+from typing import TYPE_CHECKING
 
 from scripts.leadgen.models import Lead, Tier, Vertical
 from scripts.leadgen.normalize import sanitize_company_name
 
+if TYPE_CHECKING:
+    from scripts.leadgen.validator import ValidationReport
+
 log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Score component constants (new engine)
+# ---------------------------------------------------------------------------
+
+# Revenue fit — max 30 points
+REVENUE_HIGH_BAND_MIN: int = 10_000_000  # €10M
+REVENUE_HIGH_BAND_MAX: int = 20_000_000  # €20M
+REVENUE_LOW_BAND_MIN: int = 5_000_000  # €5M
+REVENUE_HIGH_BAND_POINTS: int = 30
+REVENUE_LOW_BAND_POINTS: int = 15
+
+# Vertical alignment — max 20 points
+VERTICAL_PRIMARY_POINTS: int = 20  # Logistics
+VERTICAL_SECONDARY_POINTS: int = 10  # Construction Materials
+VERTICAL_UNKNOWN_POINTS: int = 0
+
+# Contact quality — max 30 points total
+CONFIDENCE_HIGH_THRESHOLD: int = 80
+CONFIDENCE_MED_THRESHOLD: int = 50
+CONFIDENCE_HIGH_POINTS: int = 20
+CONFIDENCE_MED_POINTS: int = 10
+CONFIDENCE_LOW_POINTS: int = 0
+LINKEDIN_BONUS_POINTS: int = 10
+
+# Validation penalties
+WARNING_PENALTY_POINTS: int = 5
+
+
+# ---------------------------------------------------------------------------
+# Existing scoring functions (unchanged — existing tests depend on them)
+# ---------------------------------------------------------------------------
 
 
 @functools.lru_cache(maxsize=1024)
@@ -105,3 +144,118 @@ def assign_tier(lead: Lead) -> Tier:
         return Tier.TIER_3
     else:
         return Tier.TIER_4
+
+
+# ---------------------------------------------------------------------------
+# New scoring engine — score_leads (Priority 4)
+# ---------------------------------------------------------------------------
+
+
+def _revenue_points(lead: Lead) -> int:
+    """Revenue fit component (max 30 points)."""
+    rev = lead.revenue_eur
+    if rev <= 0:
+        return 0
+    if REVENUE_HIGH_BAND_MIN <= rev <= REVENUE_HIGH_BAND_MAX:
+        return REVENUE_HIGH_BAND_POINTS
+    if REVENUE_LOW_BAND_MIN <= rev < REVENUE_HIGH_BAND_MIN:
+        return REVENUE_LOW_BAND_POINTS
+    return 0
+
+
+def _vertical_points(lead: Lead) -> int:
+    """Vertical alignment component (max 20 points)."""
+    if lead.vertical == Vertical.LOGISTICS:
+        return VERTICAL_PRIMARY_POINTS
+    if lead.vertical == Vertical.CONSTRUCTION_MATERIALS:
+        return VERTICAL_SECONDARY_POINTS
+    return VERTICAL_UNKNOWN_POINTS
+
+
+def _contact_points(lead: Lead) -> int:
+    """Contact quality component (max 30 points)."""
+    points = 0
+    # Hunter confidence sub-signal
+    if lead.confidence_score >= CONFIDENCE_HIGH_THRESHOLD:
+        points += CONFIDENCE_HIGH_POINTS
+    elif lead.confidence_score >= CONFIDENCE_MED_THRESHOLD:
+        points += CONFIDENCE_MED_POINTS
+    # LinkedIn presence sub-signal (additive)
+    if lead.linkedin_url.strip():
+        points += LINKEDIN_BONUS_POINTS
+    return points
+
+
+def _penalty_points(
+    lead_index: int,
+    report: ValidationReport | None,
+) -> int:
+    """Validation WARNING penalty (deducted per warning)."""
+    if report is None:
+        return 0
+    count = sum(1 for w in report.warnings if w.lead_index == lead_index)
+    return count * WARNING_PENALTY_POINTS
+
+
+def _assign_scored_tier(score: int) -> Tier:
+    """Map a clamped 0–100 score to a Tier enum value."""
+    if score >= 80:
+        return Tier.TIER_1
+    if score >= 50:
+        return Tier.TIER_2
+    return Tier.TIER_3
+
+
+def score_leads(
+    leads: list[Lead],
+    *,
+    report: ValidationReport | None = None,
+) -> list[Lead]:
+    """Score and tier a list of leads using the composable sub-rule engine.
+
+    Returns a **new** list of :class:`Lead` objects (same length, same order)
+    with ``score`` and ``tier`` populated.  The original list and its lead
+    objects are never mutated.
+
+    Args:
+        leads: Input leads to score.
+        report: Optional :class:`ValidationReport` — when provided, WARNING
+            results deduct points from the relevant lead.
+
+    Returns:
+        A new list of scored leads.
+    """
+    scored: list[Lead] = []
+
+    for idx, lead in enumerate(leads):
+        rev = _revenue_points(lead)
+        vert = _vertical_points(lead)
+        contact = _contact_points(lead)
+        penalty = _penalty_points(idx, report)
+
+        raw = rev + vert + contact - penalty
+        final = max(0, min(100, raw))
+        tier = _assign_scored_tier(final)
+
+        log.debug(
+            "Lead %d (%s): revenue=%d vertical=%d contact=%d penalty=%d → score=%d tier=%s",
+            idx,
+            lead.company_name,
+            rev,
+            vert,
+            contact,
+            penalty,
+            final,
+            tier,
+        )
+        log.info(
+            "Scored lead %d (%s): %d → %s",
+            idx,
+            lead.company_name,
+            final,
+            tier,
+        )
+
+        scored.append(dataclasses.replace(lead, score=final, tier=tier))
+
+    return scored

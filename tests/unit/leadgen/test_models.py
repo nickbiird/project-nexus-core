@@ -51,7 +51,7 @@ class TestLead:
             linkedin_url="linkedin.com/in/johndoe",
         )
         row = lead.to_row()
-        assert len(row) == 26
+        assert len(row) == 28
         assert row[0] == "Acme Corp"
         assert row[1] == "John Doe"
         assert row[2] == "john@acme.com"
