@@ -23,7 +23,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped]
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))

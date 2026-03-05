@@ -7,7 +7,7 @@ from the Master Blueprint.
 
 from __future__ import annotations
 
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped]
 
 
 class TestGenerateMessyLogistics:
