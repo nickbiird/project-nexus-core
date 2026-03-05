@@ -25,6 +25,19 @@ class TestLead:
         assert lead.reply_received == ""
         assert lead.reply_sentiment == ""
         assert lead.next_action == "Research & Send Email #1"
+        # SABI-sourced defaults
+        assert lead.nif == ""
+        assert lead.legal_name == ""
+        assert lead.revenue_eur == 0
+        assert lead.revenue_verified is False
+        assert lead.ebitda_eur == 0
+        assert lead.employees == 0
+        assert lead.website == ""
+        assert lead.city == ""
+        assert lead.province == ""
+        assert lead.cnae_primary == ""
+        assert lead.cnae_secondary == ""
+        assert lead.source == "apollo"
 
     def test_lead_to_row_column_order(self):
         """to_row() must return exactly 14 string representations in the correct order."""
@@ -38,7 +51,7 @@ class TestLead:
             linkedin_url="linkedin.com/in/johndoe",
         )
         row = lead.to_row()
-        assert len(row) == 14
+        assert len(row) == 26
         assert row[0] == "Acme Corp"
         assert row[1] == "John Doe"
         assert row[2] == "john@acme.com"

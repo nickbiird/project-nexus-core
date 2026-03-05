@@ -41,6 +41,19 @@ CSV_HEADERS: list[str] = [
     "Reply received?",
     "Reply sentiment",
     "Next action",
+    # ── SABI-sourced fields (appended for backward compatibility) ──
+    "NIF",
+    "Legal Name",
+    "Revenue (EUR)",
+    "Revenue Verified",
+    "EBITDA (EUR)",
+    "Employees",
+    "Website",
+    "City",
+    "Province",
+    "CNAE Primary",
+    "CNAE Secondary",
+    "Source",
 ]
 
 
@@ -62,6 +75,19 @@ class Lead:
     reply_received: str = field(default="")
     reply_sentiment: str = field(default="")
     next_action: str = field(default="Research & Send Email #1")
+    # ── SABI-sourced fields (all default so Apollo callers stay valid) ──
+    nif: str = field(default="")
+    legal_name: str = field(default="")
+    revenue_eur: int = field(default=0)
+    revenue_verified: bool = field(default=False)
+    ebitda_eur: int = field(default=0)
+    employees: int = field(default=0)
+    website: str = field(default="")
+    city: str = field(default="")
+    province: str = field(default="")
+    cnae_primary: str = field(default="")
+    cnae_secondary: str = field(default="")
+    source: str = field(default="apollo")
 
     def to_row(self) -> list[str]:
         """Return a list matching CSV_HEADERS order."""
@@ -81,6 +107,19 @@ class Lead:
             self.reply_received,
             self.reply_sentiment,
             self.next_action,
+            # SABI fields
+            self.nif,
+            self.legal_name,
+            str(self.revenue_eur),
+            str(self.revenue_verified),
+            str(self.ebitda_eur),
+            str(self.employees),
+            self.website,
+            self.city,
+            self.province,
+            self.cnae_primary,
+            self.cnae_secondary,
+            self.source,
         ]
 
     @classmethod
@@ -103,6 +142,11 @@ class Lead:
                 parsed_vertical = v
                 break
 
+        def get_bool(val: str | None) -> bool:
+            if not val:
+                return False
+            return val.strip().lower() in {"true", "1", "yes"}
+
         return cls(
             company_name=row.get("Company Name", ""),
             contact_name=row.get("Contact Name", ""),
@@ -118,6 +162,19 @@ class Lead:
             reply_received=row.get("Reply received?", ""),
             reply_sentiment=row.get("Reply sentiment", ""),
             next_action=row.get("Next action", ""),
+            # SABI fields
+            nif=row.get("NIF", ""),
+            legal_name=row.get("Legal Name", ""),
+            revenue_eur=get_int(row.get("Revenue (EUR)")),
+            revenue_verified=get_bool(row.get("Revenue Verified")),
+            ebitda_eur=get_int(row.get("EBITDA (EUR)")),
+            employees=get_int(row.get("Employees")),
+            website=row.get("Website", ""),
+            city=row.get("City", ""),
+            province=row.get("Province", ""),
+            cnae_primary=row.get("CNAE Primary", ""),
+            cnae_secondary=row.get("CNAE Secondary", ""),
+            source=row.get("Source", "apollo"),
         )
 
 
