@@ -518,7 +518,8 @@ def run_pipeline() -> None:
     log.info("Total leads:       %d", len(all_leads))
     log.info("  Logistics:       %d", sum(1 for ld in all_leads if ld.vertical == "Logistics"))
     log.info(
-        "  Construction:    %d", sum(1 for ld in all_leads if ld.vertical == "Construction Materials")
+        "  Construction:    %d",
+        sum(1 for ld in all_leads if ld.vertical == "Construction Materials"),
     )
     log.info("  Verified:        %d", sum(1 for ld in all_leads if ld.confidence_score > 0))
     log.info("Output file:       %s", output_path.resolve())
