@@ -120,3 +120,7 @@ data/sample_outputs/*.pdf
 .llm_cache/
 prompt_logs/
 token_usage/
+apollo_raw.csv
+yellowbird_leads.csv
+lead_gen.log
+*.log

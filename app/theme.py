@@ -1,31 +1,45 @@
 """
-Yellowbird Telemetry — Streamlit Theme & Styling
-=================================================
+Yellowbird Telemetry — Enterprise Theme & Styling
+===================================================
 
-Brand constants and CSS injection for the audit dashboard.
-Matches the landing page: navy (#0B1D3A), gold (#C9943E), DM Serif Display + DM Sans.
+Brand constants and CSS injection for the Challenger-Sale audit dashboard.
+Enterprise palette: Navy (#0B132B), Gold (#D4AF37), DM Serif Display + DM Sans.
 """
 
-# Brand colors
-NAVY = "#0B1D3A"
-NAVY_DEEP = "#06101F"
-NAVY_MID = "#132B4F"
-GOLD = "#C9943E"
-GOLD_LIGHT = "#E5BE6F"
+# ── Brand Colors (Enterprise) ─────────────────────────────────
+NAVY = "#0B132B"
+NAVY_DEEP = "#060B1A"
+NAVY_MID = "#1C2541"
+GOLD = "#D4AF37"
+GOLD_LIGHT = "#E5C76B"
 GOLD_PALE = "#F5E6C8"
 CREAM = "#FAF7F2"
 WHITE = "#FFFFFF"
 SLATE = "#4A5568"
 SLATE_LIGHT = "#A0AEC0"
-RED_LOSS = "#C53030"
-GREEN_GAIN = "#2F855A"
+RED_LOSS = "#E53E3E"
+GREEN_GAIN = "#38A169"
 
 
 def get_custom_css() -> str:
-    """Return the full custom CSS to inject into the Streamlit app."""
+    """Return the full custom CSS to inject into the Streamlit app.
+
+    Includes:
+    - White-label overrides (hide hamburger, deploy, footer)
+    - Enterprise typography (DM Serif Display + DM Sans)
+    - Financial-grade table styling
+    - Metric cards, waterfall, and deep-dive chart classes
+    """
     return f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap');
+
+        /* ── White-label: hide Streamlit chrome ── */
+        #MainMenu {{visibility: hidden;}}
+        header[data-testid="stHeader"] {{visibility: hidden; height: 0;}}
+        .stDeployButton {{display: none !important;}}
+        footer {{visibility: hidden !important;}}
+        div[data-testid="stDecoration"] {{display: none !important;}}
 
         /* ── Global overrides ── */
         .stApp {{
@@ -34,11 +48,10 @@ def get_custom_css() -> str:
             font-family: 'DM Sans', -apple-system, sans-serif;
         }}
 
-        /* Main content area */
         .main .block-container {{
-            padding-top: 2rem;
+            padding-top: 1.5rem;
             padding-bottom: 2rem;
-            max-width: 1000px;
+            max-width: 1100px;
         }}
 
         /* ── Typography ── */
@@ -60,7 +73,7 @@ def get_custom_css() -> str:
         /* ── Sidebar ── */
         [data-testid="stSidebar"] {{
             background-color: {NAVY_DEEP};
-            border-right: 1px solid rgba(201, 148, 62, 0.15);
+            border-right: 1px solid rgba(212, 175, 55, 0.15);
         }}
 
         [data-testid="stSidebar"] h1,
@@ -75,7 +88,7 @@ def get_custom_css() -> str:
             color: {SLATE_LIGHT};
         }}
 
-        /* ── Metrics ── */
+        /* ── Metrics (general + leakage cards) ── */
         [data-testid="stMetric"] {{
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid rgba(255, 255, 255, 0.08);
@@ -86,32 +99,36 @@ def get_custom_css() -> str:
         [data-testid="stMetricValue"] {{
             font-family: 'DM Serif Display', Georgia, serif !important;
             color: {GOLD} !important;
-            font-size: 2.4rem !important;
+            font-size: 2rem !important;
         }}
 
         [data-testid="stMetricLabel"] {{
             color: {SLATE_LIGHT} !important;
-            font-size: 0.8rem !important;
+            font-size: 0.78rem !important;
             text-transform: uppercase;
             letter-spacing: 0.1em;
+        }}
+
+        [data-testid="stMetricDelta"] > div {{
+            font-weight: 600 !important;
         }}
 
         /* ── File uploader ── */
         [data-testid="stFileUploader"] {{
             background: rgba(255, 255, 255, 0.03);
-            border: 2px dashed rgba(201, 148, 62, 0.3);
+            border: 2px dashed rgba(212, 175, 55, 0.3);
             border-radius: 8px;
             padding: 1.5rem;
         }}
 
         [data-testid="stFileUploader"]:hover {{
             border-color: {GOLD};
-            background: rgba(201, 148, 62, 0.05);
+            background: rgba(212, 175, 55, 0.05);
         }}
 
         /* ── Buttons ── */
         .stButton > button {{
-            background: linear-gradient(135deg, {GOLD} 0%, #D4A853 100%) !important;
+            background: linear-gradient(135deg, {GOLD} 0%, #DEBC54 100%) !important;
             color: {NAVY_DEEP} !important;
             font-weight: 700 !important;
             font-size: 0.85rem !important;
@@ -120,12 +137,12 @@ def get_custom_css() -> str:
             border: none !important;
             border-radius: 4px !important;
             padding: 0.7rem 2rem !important;
-            box-shadow: 0 4px 15px rgba(201, 148, 62, 0.25) !important;
+            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.25) !important;
             transition: all 0.3s ease !important;
         }}
 
         .stButton > button:hover {{
-            box-shadow: 0 8px 25px rgba(201, 148, 62, 0.4) !important;
+            box-shadow: 0 8px 25px rgba(212, 175, 55, 0.4) !important;
             transform: translateY(-2px);
         }}
 
@@ -133,7 +150,7 @@ def get_custom_css() -> str:
         .stDownloadButton > button {{
             background: transparent !important;
             color: {GOLD} !important;
-            border: 1px solid rgba(201, 148, 62, 0.4) !important;
+            border: 1px solid rgba(212, 175, 55, 0.4) !important;
             font-weight: 600 !important;
             text-transform: uppercase !important;
             letter-spacing: 0.06em !important;
@@ -141,15 +158,41 @@ def get_custom_css() -> str:
         }}
 
         .stDownloadButton > button:hover {{
-            background: rgba(201, 148, 62, 0.1) !important;
+            background: rgba(212, 175, 55, 0.1) !important;
             border-color: {GOLD} !important;
         }}
 
-        /* ── DataFrames/Tables ── */
+        /* ── DataFrames / Tables — clean financial look ── */
         [data-testid="stDataFrame"] {{
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: none;
             border-radius: 6px;
             overflow: hidden;
+        }}
+
+        [data-testid="stDataFrame"] table {{
+            border-collapse: collapse;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.85rem;
+        }}
+
+        [data-testid="stDataFrame"] th {{
+            background: {NAVY_MID} !important;
+            color: {GOLD} !important;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.72rem;
+            letter-spacing: 0.08em;
+            border: none !important;
+        }}
+
+        [data-testid="stDataFrame"] td {{
+            border: none !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+            color: rgba(255, 255, 255, 0.85);
+        }}
+
+        [data-testid="stDataFrame"] tr:nth-child(even) td {{
+            background: rgba(255, 255, 255, 0.02);
         }}
 
         /* ── Expanders ── */
@@ -197,14 +240,15 @@ def get_custom_css() -> str:
 
         /* ── Divider ── */
         hr {{
-            border-color: rgba(201, 148, 62, 0.15) !important;
+            border-color: rgba(212, 175, 55, 0.15) !important;
         }}
 
-        /* ── Custom classes ── */
+        /* ═══ Custom Component Classes ═══ */
+
         .brand-header {{
             text-align: center;
             padding: 1rem 0 2rem;
-            border-bottom: 1px solid rgba(201, 148, 62, 0.15);
+            border-bottom: 1px solid rgba(212, 175, 55, 0.15);
             margin-bottom: 2rem;
         }}
 
@@ -274,7 +318,7 @@ def get_custom_css() -> str:
         }}
 
         .exec-summary {{
-            background: rgba(201, 148, 62, 0.08);
+            background: rgba(212, 175, 55, 0.08);
             border-left: 3px solid {GOLD};
             border-radius: 0 6px 6px 0;
             padding: 1.5rem 2rem;
@@ -306,8 +350,8 @@ def get_custom_css() -> str:
 
         .total-impact-box {{
             text-align: center;
-            background: linear-gradient(135deg, rgba(197, 48, 48, 0.1) 0%, rgba(197, 48, 48, 0.05) 100%);
-            border: 1px solid rgba(197, 48, 48, 0.3);
+            background: linear-gradient(135deg, rgba(229, 62, 62, 0.12) 0%, rgba(229, 62, 62, 0.04) 100%);
+            border: 1px solid rgba(229, 62, 62, 0.3);
             border-radius: 8px;
             padding: 1.5rem;
             margin: 1.5rem 0;
@@ -326,6 +370,33 @@ def get_custom_css() -> str:
             letter-spacing: 0.12em;
             margin-top: 0.3rem;
         }}
+
+        /* ── Margin Leakage Section ── */
+        .leakage-header {{
+            text-align: center;
+            padding: 1.5rem 0;
+            margin-bottom: 1rem;
+        }}
+
+        .leakage-header h2 {{
+            color: {GOLD} !important;
+            font-size: 1.6rem !important;
+            margin-bottom: 0.3rem;
+        }}
+
+        .leakage-header .sub {{
+            color: {SLATE_LIGHT};
+            font-size: 0.82rem;
+            letter-spacing: 0.08em;
+        }}
+
+        /* ── Plotly chart containers  ── */
+        [data-testid="stPlotlyChart"] {{
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            padding: 0.5rem;
+        }}
     </style>
     """
 
@@ -336,6 +407,16 @@ def render_header():
     <div class="brand-header">
         <h1>Yellowbird<span class="dot">.</span> Telemetry</h1>
         <div class="subtitle">Auditoría de Calidad de Datos</div>
+    </div>
+    """
+
+
+def render_margin_leakage_header():
+    """Render the 'Kill Shot' margin leakage section header."""
+    return """
+    <div class="leakage-header">
+        <h2>Margin Leakage Summary</h2>
+        <div class="sub">Where your revenue disappears — quantified in euros</div>
     </div>
     """
 

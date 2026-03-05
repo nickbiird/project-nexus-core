@@ -11,6 +11,7 @@ rapidfuzz>=3.5.0,<4.0      # Fast fuzzy string matching
 
 # Web app
 streamlit>=1.30.0,<2.0     # Dashboard framework
+plotly>=5.18.0,<6.0        # Waterfall chart & interactive visualizations
 
 # Testing
 pytest>=7.4.0

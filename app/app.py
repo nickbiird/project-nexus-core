@@ -1,9 +1,10 @@
 """
-Yellowbird Telemetry — Audit Dashboard (Streamlit MVP)
-======================================================
+Yellowbird Telemetry — Enterprise Audit Dashboard (Challenger Sale Edition)
+===========================================================================
 
 A premium, schema-less data quality audit tool for the Free Audit Hook.
-Upload any Excel/CSV → get a branded profiling report with € impact findings.
+Upload any Excel/CSV → get a branded profiling report with € impact findings
+presented as a "Margin Leakage" narrative with Plotly waterfall chart.
 
 Run: streamlit run app/app.py
 """
@@ -19,6 +20,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 # ── Ensure src/ is importable ──
@@ -28,16 +30,21 @@ if str(ROOT) not in sys.path:
 
 from app.theme import (
     GOLD,
+    GOLD_LIGHT,
     NAVY,
+    NAVY_DEEP,
+    NAVY_MID,
     RED_LOSS,
     SLATE_LIGHT,
     GREEN_GAIN,
+    WHITE,
     get_custom_css,
     health_score_color,
     render_exec_summary,
     render_finding_card,
     render_header,
     render_health_score,
+    render_margin_leakage_header,
     render_total_impact,
 )
 from src.etl.profilers.excel_profiler import ProfilingReport, profile_excel
@@ -62,6 +69,14 @@ st.markdown(get_custom_css(), unsafe_allow_html=True)
 
 MAX_FILE_SIZE_MB = 50
 MAX_ROWS_WARNING = 50_000
+
+# Plotly shared layout
+_PLOTLY_LAYOUT = dict(
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(family="DM Sans, sans-serif", color=WHITE),
+    margin=dict(l=40, r=40, t=50, b=40),
+)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -111,6 +126,217 @@ def generate_demo_data() -> pd.DataFrame:
 
     df = pd.DataFrame(data)
     return df
+
+
+# ──────────────────────────────────────────────────────────────
+# Helper: Build Plotly Waterfall Chart
+# ──────────────────────────────────────────────────────────────
+
+
+def build_waterfall_chart(report: ProfilingReport, gross_revenue: float) -> go.Figure:
+    """Build a 'Kill Shot' waterfall chart showing margin leakage.
+
+    Starts with Total Gross Revenue, deducts each finding category,
+    and ends with Realized Net Margin.
+    """
+    # Aggregate findings by category for cleaner display
+    category_labels = {
+        "duplicate_charges": "Duplicate Invoice Leakage",
+        "pricing_spread": "Pricing Inconsistencies",
+        "concentration_risk": "Concentration Risk Exposure",
+        "negative_margin": "Negative-Margin Transactions",
+    }
+    category_impacts: dict[str, float] = {}
+    for f in report.findings:
+        label = category_labels.get(f.category, f.category.replace("_", " ").title())
+        category_impacts[label] = category_impacts.get(label, 0) + f.estimated_eur_impact
+
+    # Build waterfall data
+    labels = ["Total Gross Revenue"]
+    values = [gross_revenue]
+    measures = ["absolute"]
+
+    for label, impact in category_impacts.items():
+        labels.append(label)
+        values.append(-abs(impact))
+        measures.append("relative")
+
+    labels.append("Realized Net Margin")
+    values.append(0)  # Plotly computes the total automatically
+    measures.append("total")
+
+    fig = go.Figure(go.Waterfall(
+        name="Margin Leakage",
+        orientation="v",
+        measure=measures,
+        x=labels,
+        y=values,
+        textposition="outside",
+        text=[f"€{abs(v):,.0f}" for v in values],
+        connector=dict(line=dict(color=SLATE_LIGHT, width=1, dash="dot")),
+        increasing=dict(marker=dict(color=GREEN_GAIN)),
+        decreasing=dict(marker=dict(color=RED_LOSS)),
+        totals=dict(marker=dict(color=GOLD)),
+    ))
+
+    fig.update_layout(
+        **_PLOTLY_LAYOUT,
+        title=None,
+        showlegend=False,
+        height=420,
+        xaxis=dict(
+            tickangle=-25,
+            tickfont=dict(size=11),
+            gridcolor="rgba(255,255,255,0.05)",
+        ),
+        yaxis=dict(
+            title="EUR (€)",
+            gridcolor="rgba(255,255,255,0.05)",
+            tickprefix="€",
+            separatethousands=True,
+        ),
+    )
+    return fig
+
+
+# ──────────────────────────────────────────────────────────────
+# Helper: Build Plotly Anomaly Scatter
+# ──────────────────────────────────────────────────────────────
+
+
+def build_anomaly_scatter(anomaly_analysis) -> go.Figure:
+    """Build an interactive scatter plot of anomalies for a column."""
+    if not anomaly_analysis.anomalies:
+        return None
+
+    type_colors = {
+        "outlier_high": RED_LOSS,
+        "outlier_low": "#F6AD55",
+        "zero_value": SLATE_LIGHT,
+        "negative": "#FC8181",
+        "duplicate_invoice": GOLD,
+    }
+    type_labels = {
+        "outlier_high": "Outlier (High)",
+        "outlier_low": "Outlier (Low)",
+        "zero_value": "Zero Value",
+        "negative": "Negative",
+        "duplicate_invoice": "Duplicate Invoice",
+    }
+
+    fig = go.Figure()
+
+    # Group anomalies by type for legend
+    by_type: dict[str, list] = {}
+    for a in anomaly_analysis.anomalies:
+        by_type.setdefault(a.anomaly_type, []).append(a)
+
+    for atype, anomalies in by_type.items():
+        fig.add_trace(go.Scatter(
+            x=[a.row_index for a in anomalies],
+            y=[a.value for a in anomalies],
+            mode="markers",
+            name=type_labels.get(atype, atype),
+            marker=dict(
+                color=type_colors.get(atype, GOLD),
+                size=10,
+                line=dict(width=1, color="rgba(255,255,255,0.3)"),
+            ),
+            hovertemplate=(
+                "<b>Row %{x}</b><br>"
+                "Value: €%{y:,.2f}<br>"
+                "<extra>%{fullData.name}</extra>"
+            ),
+        ))
+
+    # Add median reference line
+    fig.add_hline(
+        y=anomaly_analysis.median,
+        line_dash="dash",
+        line_color=GOLD,
+        annotation_text=f"Median: €{anomaly_analysis.median:,.2f}",
+        annotation_font_color=GOLD,
+    )
+
+    fig.update_layout(
+        **_PLOTLY_LAYOUT,
+        title=dict(
+            text=f"Anomalies — {anomaly_analysis.column_name}",
+            font=dict(size=14, family="DM Serif Display, Georgia, serif"),
+        ),
+        height=380,
+        xaxis=dict(
+            title="Row Index",
+            gridcolor="rgba(255,255,255,0.05)",
+        ),
+        yaxis=dict(
+            title="Value (€)",
+            gridcolor="rgba(255,255,255,0.05)",
+            tickprefix="€",
+            separatethousands=True,
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(size=11),
+        ),
+    )
+    return fig
+
+
+def build_anomaly_type_bar(anomaly_analysis) -> go.Figure:
+    """Build a horizontal bar chart of anomaly type counts."""
+    if not anomaly_analysis.anomalies:
+        return None
+
+    type_labels = {
+        "outlier_high": "Outlier (High)",
+        "outlier_low": "Outlier (Low)",
+        "zero_value": "Zero Value",
+        "negative": "Negative",
+        "duplicate_invoice": "Duplicate Invoice",
+    }
+
+    counts: dict[str, int] = {}
+    for a in anomaly_analysis.anomalies:
+        label = type_labels.get(a.anomaly_type, a.anomaly_type)
+        counts[label] = counts.get(label, 0) + 1
+
+    sorted_items = sorted(counts.items(), key=lambda x: x[1], reverse=True)
+    labels = [item[0] for item in sorted_items]
+    values = [item[1] for item in sorted_items]
+
+    fig = go.Figure(go.Bar(
+        y=labels,
+        x=values,
+        orientation="h",
+        marker=dict(
+            color=[RED_LOSS if "Outlier" in l else (SLATE_LIGHT if "Zero" in l else GOLD) for l in labels],
+            line=dict(width=0),
+        ),
+        text=values,
+        textposition="auto",
+        textfont=dict(color=WHITE),
+    ))
+
+    fig.update_layout(
+        **_PLOTLY_LAYOUT,
+        title=dict(
+            text="Anomaly Distribution by Type",
+            font=dict(size=14, family="DM Serif Display, Georgia, serif"),
+        ),
+        height=280,
+        xaxis=dict(
+            title="Count",
+            gridcolor="rgba(255,255,255,0.05)",
+        ),
+        yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+        showlegend=False,
+    )
+    return fig
 
 
 # ──────────────────────────────────────────────────────────────
@@ -171,27 +397,27 @@ def generate_html_report(report: ProfilingReport) -> str:
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;600;700&display=swap"
           rel="stylesheet">
     <style>
-        body {{ font-family: 'DM Sans', sans-serif; color: #0B1D3A; max-width: 800px;
+        body {{ font-family: 'DM Sans', sans-serif; color: #0B132B; max-width: 800px;
                margin: 0 auto; padding: 2rem; background: #FAF7F2; }}
         h1 {{ font-family: 'DM Serif Display', Georgia, serif; font-weight: 400; }}
         h2 {{ font-family: 'DM Serif Display', Georgia, serif; font-weight: 400;
               border-bottom: 1px solid #E2E8F0; padding-bottom: 0.5rem; margin-top: 2rem; }}
-        .header {{ text-align: center; padding: 2rem 0; border-bottom: 2px solid #C9943E; margin-bottom: 2rem; }}
-        .header h1 span {{ color: #C9943E; }}
+        .header {{ text-align: center; padding: 2rem 0; border-bottom: 2px solid #D4AF37; margin-bottom: 2rem; }}
+        .header h1 span {{ color: #D4AF37; }}
         .header .sub {{ color: #A0AEC0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.15em; }}
         .score {{ text-align: center; margin: 2rem 0; }}
         .score .number {{ font-family: 'DM Serif Display', Georgia, serif; font-size: 4rem;
                           color: {score_color}; }}
         .score .label {{ color: #A0AEC0; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.15em; }}
-        .summary {{ background: rgba(201,148,62,0.08); border-left: 3px solid #C9943E;
+        .summary {{ background: rgba(212,175,55,0.08); border-left: 3px solid #D4AF37;
                     padding: 1.2rem 1.5rem; border-radius: 0 6px 6px 0; margin: 1.5rem 0;
                     font-size: 1.05rem; line-height: 1.7; }}
         table {{ width: 100%; border-collapse: collapse; margin: 1rem 0; }}
-        th {{ text-align: left; padding: 0.6rem 0.8rem; background: #0B1D3A; color: white;
+        th {{ text-align: left; padding: 0.6rem 0.8rem; background: #0B132B; color: white;
               font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }}
         .meta {{ color: #A0AEC0; font-size: 0.78rem; margin-top: 2rem; text-align: center;
                  border-top: 1px solid #E2E8F0; padding-top: 1rem; }}
-        .confidential {{ color: #C9943E; font-size: 0.7rem; text-transform: uppercase;
+        .confidential {{ color: #D4AF37; font-size: 0.7rem; text-transform: uppercase;
                         letter-spacing: 0.2em; text-align: center; margin-bottom: 1rem; }}
     </style>
 </head>
@@ -289,7 +515,7 @@ with st.sidebar:
     st.markdown(
         f'<div style="text-align:center; color:{SLATE_LIGHT}; font-size:0.72rem;">'
         f"Yellowbird<span style='color:{GOLD};'>.</span> Telemetry<br>"
-        f"© 2026 · v1.0.0</div>",
+        f"© 2026 · v2.0.0</div>",
         unsafe_allow_html=True,
     )
 
@@ -408,36 +634,101 @@ if file_to_profile is not None:
 
         st.divider()
 
-        # ── Section: Executive Summary ──
-        st.markdown('<div class="section-tag">Resumen Ejecutivo</div>', unsafe_allow_html=True)
-        st.markdown(render_exec_summary(report.to_summary_str()), unsafe_allow_html=True)
+        # ==============================================================
+        # SEQUENTIAL REVEAL: Tabs for Challenger Sale tension build
+        # ==============================================================
 
-        # ── Section: Health Score + Key Metrics ──
-        col_score, col_metrics = st.columns([1, 2])
-
-        with col_score:
-            st.markdown(render_health_score(report.data_health_score), unsafe_allow_html=True)
-
-        with col_metrics:
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Completitud", f"{report.completeness_score:.0f}/100")
-            m2.metric("Consistencia", f"{report.consistency_score:.0f}/100")
-            m3.metric("Unicidad", f"{report.uniqueness_score:.0f}/100")
-
-            m4, m5, m6 = st.columns(3)
-            m4.metric("Filas", f"{report.total_rows:,}")
-            m5.metric("Columnas", f"{report.total_columns}")
-            m6.metric("Tiempo", f"{report.processing_time_seconds:.1f}s")
-
-        st.divider()
-
-        # ── Section: Tabs ──
-        tab_findings, tab_entities, tab_anomalies, tab_columns, tab_download = st.tabs([
-            "Hallazgos (€)", "Entidades", "Anomalías", "Columnas", "Descargar"
+        tab_exec, tab_deepdive, tab_entities, tab_columns, tab_download = st.tabs([
+            "📊 Executive Summary",
+            "🔍 Anomaly Deep-Dive",
+            "👥 Entidades",
+            "📋 Columnas",
+            "⬇ Descargar",
         ])
 
-        # ── Tab: Findings ──
-        with tab_findings:
+        # ──────────────────────────────────────────────────────
+        # TAB 1: Executive Summary — the "Kill Shot"
+        # ──────────────────────────────────────────────────────
+        with tab_exec:
+            # Section tag
+            st.markdown(render_margin_leakage_header(), unsafe_allow_html=True)
+
+            # ── Margin Leakage Metric Cards ──
+            # Compute gross revenue from the first financial column
+            gross_revenue = 0.0
+            if report.detected_financial_columns:
+                fin_col = report.detected_financial_columns[0]
+                # Re-load demo data or a reasonable estimate from the report
+                if st.session_state.demo_df is not None:
+                    try:
+                        gross_revenue = float(
+                            pd.to_numeric(
+                                st.session_state.demo_df[fin_col], errors="coerce"
+                            ).sum()
+                        )
+                    except Exception:
+                        pass
+                if gross_revenue == 0:
+                    # Fallback: estimate from anomaly analysis mean * rows
+                    for aa in report.anomaly_analyses:
+                        if aa.column_name == fin_col:
+                            gross_revenue = aa.mean * report.total_rows
+                            break
+
+            total_anomaly_count = sum(
+                aa.outlier_count + aa.zero_count + aa.negative_count
+                for aa in report.anomaly_analyses
+            )
+
+            leakage = report.total_estimated_impact_eur
+            net_margin = gross_revenue - leakage
+
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Total Gross Revenue", f"€{gross_revenue:,.0f}")
+            m2.metric("Anomalies Detected", f"{total_anomaly_count}")
+            m3.metric(
+                "Est. Margin Leakage",
+                f"€{leakage:,.0f}",
+                delta=f"-{leakage / gross_revenue * 100:.1f}%" if gross_revenue > 0 else None,
+                delta_color="inverse",
+            )
+            m4.metric("Data Health Score", f"{report.data_health_score:.0f}/100")
+
+            st.markdown("")  # spacer
+
+            # ── Waterfall Chart ──
+            if report.findings and gross_revenue > 0:
+                waterfall_fig = build_waterfall_chart(report, gross_revenue)
+                st.plotly_chart(waterfall_fig, use_container_width=True)
+            else:
+                st.info("No se detectaron hallazgos financieros para generar el análisis de cascada.")
+
+            st.divider()
+
+            # ── Executive Summary Text ──
+            st.markdown('<div class="section-tag">Resumen Ejecutivo</div>', unsafe_allow_html=True)
+            st.markdown(render_exec_summary(report.to_summary_str()), unsafe_allow_html=True)
+
+            # ── Health Score + Quality Metrics ──
+            col_score, col_metrics = st.columns([1, 2])
+
+            with col_score:
+                st.markdown(render_health_score(report.data_health_score), unsafe_allow_html=True)
+
+            with col_metrics:
+                q1, q2, q3 = st.columns(3)
+                q1.metric("Completitud", f"{report.completeness_score:.0f}/100")
+                q2.metric("Consistencia", f"{report.consistency_score:.0f}/100")
+                q3.metric("Unicidad", f"{report.uniqueness_score:.0f}/100")
+
+                q4, q5, q6 = st.columns(3)
+                q4.metric("Filas", f"{report.total_rows:,}")
+                q5.metric("Columnas", f"{report.total_columns}")
+                q6.metric("Tiempo", f"{report.processing_time_seconds:.1f}s")
+
+            st.divider()
+
+            # ── Findings Cards (detailed) ──
             st.markdown('<div class="section-tag">Hallazgos Clave · Impacto en Euros</div>', unsafe_allow_html=True)
 
             if report.findings:
@@ -454,24 +745,60 @@ if file_to_profile is not None:
                     )
 
                 st.markdown(render_total_impact(report.total_estimated_impact_eur), unsafe_allow_html=True)
-
-                # Findings as DataFrame for easy reading
-                with st.expander("Ver como tabla"):
-                    findings_df = pd.DataFrame([
-                        {
-                            "Hallazgo": f.description,
-                            "Impacto (€)": f"€{f.estimated_eur_impact:,.0f}",
-                            "Confianza": f.confidence.title(),
-                            "Filas": f.rows_affected,
-                            "Categoría": f.category,
-                        }
-                        for f in report.findings
-                    ])
-                    st.dataframe(findings_df, use_container_width=True, hide_index=True)
             else:
                 st.info("No se detectaron hallazgos financieros significativos en estos datos.")
 
-        # ── Tab: Entities ──
+        # ──────────────────────────────────────────────────────
+        # TAB 2: Anomaly Deep-Dive — Interactive Plotly Charts
+        # ──────────────────────────────────────────────────────
+        with tab_deepdive:
+            st.markdown('<div class="section-tag">Anomalías Financieras · Exploración Interactiva</div>', unsafe_allow_html=True)
+
+            if report.anomaly_analyses:
+                for aa in report.anomaly_analyses:
+                    st.markdown(f"### {aa.column_name}")
+
+                    # Metric row
+                    am1, am2, am3, am4 = st.columns(4)
+                    am1.metric("Media", f"€{aa.mean:,.2f}")
+                    am2.metric("Mediana", f"€{aa.median:,.2f}")
+                    am3.metric("Outliers", str(aa.outlier_count))
+                    am4.metric("Negativos", str(aa.negative_count))
+
+                    # Interactive charts
+                    if aa.anomalies:
+                        chart_col1, chart_col2 = st.columns([3, 2])
+
+                        with chart_col1:
+                            scatter_fig = build_anomaly_scatter(aa)
+                            if scatter_fig:
+                                st.plotly_chart(scatter_fig, use_container_width=True)
+
+                        with chart_col2:
+                            bar_fig = build_anomaly_type_bar(aa)
+                            if bar_fig:
+                                st.plotly_chart(bar_fig, use_container_width=True)
+
+                        # Raw data in expander
+                        with st.expander(f"Ver {len(aa.anomalies)} anomalías detectadas (tabla)"):
+                            anomaly_df = pd.DataFrame([
+                                {
+                                    "Tipo": a.anomaly_type.replace("_", " ").title(),
+                                    "Valor (€)": a.value,
+                                    "Fila": a.row_index,
+                                    "Detalle": a.context,
+                                }
+                                for a in aa.anomalies[:20]
+                            ])
+                            st.dataframe(anomaly_df, use_container_width=True, hide_index=True)
+
+                    st.divider()
+            else:
+                st.info("No se detectaron anomalías financieras en estos datos.")
+
+        # ──────────────────────────────────────────────────────
+        # TAB 3: Entity Analysis
+        # ──────────────────────────────────────────────────────
         with tab_entities:
             st.markdown('<div class="section-tag">Análisis de Entidades Duplicadas</div>', unsafe_allow_html=True)
 
@@ -503,40 +830,9 @@ if file_to_profile is not None:
             else:
                 st.info("No se detectaron columnas de entidades en estos datos.")
 
-        # ── Tab: Anomalies ──
-        with tab_anomalies:
-            st.markdown('<div class="section-tag">Anomalías Financieras Detectadas</div>', unsafe_allow_html=True)
-
-            if report.anomaly_analyses:
-                for aa in report.anomaly_analyses:
-                    st.markdown(f"**Columna: `{aa.column_name}`**")
-
-                    am1, am2, am3, am4 = st.columns(4)
-                    am1.metric("Media", f"€{aa.mean:,.2f}")
-                    am2.metric("Mediana", f"€{aa.median:,.2f}")
-                    am3.metric("Outliers", str(aa.outlier_count))
-                    am4.metric("Negativos", str(aa.negative_count))
-
-                    # Simple boxplot-like visualization using a bar chart of anomaly types
-                    if aa.anomalies:
-                        anomaly_df = pd.DataFrame([
-                            {
-                                "Tipo": a.anomaly_type.replace("_", " ").title(),
-                                "Valor (€)": a.value,
-                                "Fila": a.row_index,
-                                "Detalle": a.context,
-                            }
-                            for a in aa.anomalies[:20]
-                        ])
-
-                        with st.expander(f"Ver {len(aa.anomalies)} anomalías detectadas"):
-                            st.dataframe(anomaly_df, use_container_width=True, hide_index=True)
-
-                    st.divider()
-            else:
-                st.info("No se detectaron anomalías financieras en estos datos.")
-
-        # ── Tab: Columns ──
+        # ──────────────────────────────────────────────────────
+        # TAB 4: Column Quality
+        # ──────────────────────────────────────────────────────
         with tab_columns:
             st.markdown('<div class="section-tag">Estructura de Columnas Detectada</div>', unsafe_allow_html=True)
 
@@ -552,17 +848,34 @@ if file_to_profile is not None:
                 })
             st.dataframe(pd.DataFrame(col_data), use_container_width=True, hide_index=True)
 
-            # Missing data heatmap (simplified as bar chart)
+            # Completeness bar chart — Plotly
             st.markdown("**Completitud por columna:**")
-            completeness_data = pd.DataFrame({
-                "Columna": [cp.name for cp in report.column_profiles],
-                "Completitud (%)": [round(100 - cp.null_pct, 1) for cp in report.column_profiles],
-            })
-            st.bar_chart(
-                completeness_data.set_index("Columna"),
-                color=GOLD,
-                height=300,
+            completeness_names = [cp.name for cp in report.column_profiles]
+            completeness_vals = [round(100 - cp.null_pct, 1) for cp in report.column_profiles]
+
+            fig_completeness = go.Figure(go.Bar(
+                x=completeness_names,
+                y=completeness_vals,
+                marker=dict(
+                    color=[GOLD if v >= 90 else (SLATE_LIGHT if v >= 70 else RED_LOSS) for v in completeness_vals],
+                    line=dict(width=0),
+                ),
+                text=[f"{v}%" for v in completeness_vals],
+                textposition="auto",
+                textfont=dict(color=WHITE, size=10),
+            ))
+            fig_completeness.update_layout(
+                **_PLOTLY_LAYOUT,
+                height=320,
+                yaxis=dict(
+                    title="Completitud (%)",
+                    range=[0, 105],
+                    gridcolor="rgba(255,255,255,0.05)",
+                ),
+                xaxis=dict(tickangle=-30, gridcolor="rgba(255,255,255,0.05)"),
+                showlegend=False,
             )
+            st.plotly_chart(fig_completeness, use_container_width=True)
 
             st.markdown("**Columnas clave detectadas:**")
             kc1, kc2, kc3 = st.columns(3)
@@ -573,7 +886,9 @@ if file_to_profile is not None:
             with kc3:
                 st.markdown(f"**Fechas:** {', '.join(report.detected_date_columns) or '—'}")
 
-        # ── Tab: Downloads ──
+        # ──────────────────────────────────────────────────────
+        # TAB 5: Downloads
+        # ──────────────────────────────────────────────────────
         with tab_download:
             st.markdown('<div class="section-tag">Descargar Informe</div>', unsafe_allow_html=True)
 
