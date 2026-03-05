@@ -118,7 +118,16 @@ select = [
     "SIM",    # flake8-simplify
     "RUF",    # Ruff-specific rules
 ]
-ignore = ["ANN101", "ANN102"]  # self/cls annotation
+ignore = [
+    "S101",
+    "T201",
+    "RUF001", "RUF002", "RUF003",
+    "E501",
+    "ANN001", "ANN201", "ANN401",
+    "S105", "S104", "S311",
+    "SIM103", "SIM108",
+    "RUF059",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["src", "scripts", "dashboard", "api"]

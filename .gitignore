@@ -124,3 +124,4 @@ apollo_raw.csv
 yellowbird_leads.csv
 lead_gen.log
 *.log
+data/synthetic/logistics_invoices_ground_truth.xlsx

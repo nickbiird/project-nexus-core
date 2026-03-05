@@ -33,9 +33,7 @@ from __future__ import annotations
 
 import argparse
 import random
-import sys
 from datetime import datetime, timedelta
-from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -52,14 +50,14 @@ DEFAULT_OUTPUT: str = "data/synthetic/logistics_invoices.xlsx"
 DEFAULT_SEED: int = 2026
 
 # Error injection rates (calibrated to industry benchmarks)
-INVOICE_ERROR_RATE: float = 0.12          # 12% of invoices contain at least one error
-MISSING_FIELD_RATE: float = 0.08          # 8% chance any given field is null
-DECIMAL_CONFUSION_RATE: float = 0.25      # 25% of monetary values use EU format
-DATE_FORMAT_CHAOS_RATE: float = 0.35      # 35% of dates use non-standard formats
-ENTITY_DUPLICATE_RATE: float = 0.20       # 20% of entity references are "dirty" variants
-UNBILLED_ACCESSORIAL_RATE: float = 0.15   # 15% of shipments have unbilled accessorials
-UNPROFITABLE_ROUTE_RATE: float = 0.30     # 30% of routes are margin-negative
-DUPLICATE_INVOICE_RATE: float = 0.03      # 3% are exact or near-duplicate invoices
+INVOICE_ERROR_RATE: float = 0.12  # 12% of invoices contain at least one error
+MISSING_FIELD_RATE: float = 0.08  # 8% chance any given field is null
+DECIMAL_CONFUSION_RATE: float = 0.25  # 25% of monetary values use EU format
+DATE_FORMAT_CHAOS_RATE: float = 0.35  # 35% of dates use non-standard formats
+ENTITY_DUPLICATE_RATE: float = 0.20  # 20% of entity references are "dirty" variants
+UNBILLED_ACCESSORIAL_RATE: float = 0.15  # 15% of shipments have unbilled accessorials
+UNPROFITABLE_ROUTE_RATE: float = 0.30  # 30% of routes are margin-negative
+DUPLICATE_INVOICE_RATE: float = 0.03  # 3% are exact or near-duplicate invoices
 
 # ---------------------------------------------------------------------------
 # Domain Knowledge: Spanish Logistics Company Entities
@@ -124,29 +122,150 @@ SUPPLIERS: dict[str, list[str]] = {
 # Route definitions with realistic cost structures
 # (origin, destination, base_km, base_fuel_eur, base_toll_eur, avg_hours, is_profitable)
 ROUTES: list[dict[str, Any]] = [
-    {"origin": "Barcelona",   "dest": "Madrid",        "km": 620,  "fuel": 185.0, "toll": 62.0,  "hours": 6.5,  "profitable": True},
-    {"origin": "Barcelona",   "dest": "Valencia",      "km": 350,  "fuel": 105.0, "toll": 35.0,  "hours": 3.8,  "profitable": True},
-    {"origin": "Barcelona",   "dest": "Zaragoza",      "km": 310,  "fuel": 93.0,  "toll": 28.0,  "hours": 3.2,  "profitable": True},
-    {"origin": "Barcelona",   "dest": "Toulouse",      "km": 390,  "fuel": 120.0, "toll": 48.0,  "hours": 4.5,  "profitable": True},
-    {"origin": "Barcelona",   "dest": "Perpignan",     "km": 190,  "fuel": 57.0,  "toll": 22.0,  "hours": 2.2,  "profitable": True},
-    {"origin": "Tarragona",   "dest": "Lleida",        "km": 105,  "fuel": 32.0,  "toll": 8.0,   "hours": 1.3,  "profitable": True},
-    {"origin": "Girona",      "dest": "Barcelona",     "km": 100,  "fuel": 30.0,  "toll": 12.0,  "hours": 1.2,  "profitable": True},
+    {
+        "origin": "Barcelona",
+        "dest": "Madrid",
+        "km": 620,
+        "fuel": 185.0,
+        "toll": 62.0,
+        "hours": 6.5,
+        "profitable": True,
+    },
+    {
+        "origin": "Barcelona",
+        "dest": "Valencia",
+        "km": 350,
+        "fuel": 105.0,
+        "toll": 35.0,
+        "hours": 3.8,
+        "profitable": True,
+    },
+    {
+        "origin": "Barcelona",
+        "dest": "Zaragoza",
+        "km": 310,
+        "fuel": 93.0,
+        "toll": 28.0,
+        "hours": 3.2,
+        "profitable": True,
+    },
+    {
+        "origin": "Barcelona",
+        "dest": "Toulouse",
+        "km": 390,
+        "fuel": 120.0,
+        "toll": 48.0,
+        "hours": 4.5,
+        "profitable": True,
+    },
+    {
+        "origin": "Barcelona",
+        "dest": "Perpignan",
+        "km": 190,
+        "fuel": 57.0,
+        "toll": 22.0,
+        "hours": 2.2,
+        "profitable": True,
+    },
+    {
+        "origin": "Tarragona",
+        "dest": "Lleida",
+        "km": 105,
+        "fuel": 32.0,
+        "toll": 8.0,
+        "hours": 1.3,
+        "profitable": True,
+    },
+    {
+        "origin": "Girona",
+        "dest": "Barcelona",
+        "km": 100,
+        "fuel": 30.0,
+        "toll": 12.0,
+        "hours": 1.2,
+        "profitable": True,
+    },
     # --- Unprofitable routes (the "bleeding neck") ---
-    {"origin": "Barcelona",   "dest": "Almería",       "km": 830,  "fuel": 250.0, "toll": 78.0,  "hours": 8.8,  "profitable": False},
-    {"origin": "Barcelona",   "dest": "Badajoz",       "km": 1010, "fuel": 305.0, "toll": 95.0,  "hours": 10.5, "profitable": False},
-    {"origin": "Barcelona",   "dest": "A Coruña",      "km": 1120, "fuel": 340.0, "toll": 110.0, "hours": 11.2, "profitable": False},
-    {"origin": "Tarragona",   "dest": "Sevilla",       "km": 950,  "fuel": 285.0, "toll": 88.0,  "hours": 9.5,  "profitable": False},
-    {"origin": "Barcelona",   "dest": "Lisboa",        "km": 1250, "fuel": 375.0, "toll": 130.0, "hours": 12.5, "profitable": False},
+    {
+        "origin": "Barcelona",
+        "dest": "Almería",
+        "km": 830,
+        "fuel": 250.0,
+        "toll": 78.0,
+        "hours": 8.8,
+        "profitable": False,
+    },
+    {
+        "origin": "Barcelona",
+        "dest": "Badajoz",
+        "km": 1010,
+        "fuel": 305.0,
+        "toll": 95.0,
+        "hours": 10.5,
+        "profitable": False,
+    },
+    {
+        "origin": "Barcelona",
+        "dest": "A Coruña",
+        "km": 1120,
+        "fuel": 340.0,
+        "toll": 110.0,
+        "hours": 11.2,
+        "profitable": False,
+    },
+    {
+        "origin": "Tarragona",
+        "dest": "Sevilla",
+        "km": 950,
+        "fuel": 285.0,
+        "toll": 88.0,
+        "hours": 9.5,
+        "profitable": False,
+    },
+    {
+        "origin": "Barcelona",
+        "dest": "Lisboa",
+        "km": 1250,
+        "fuel": 375.0,
+        "toll": 130.0,
+        "hours": 12.5,
+        "profitable": False,
+    },
 ]
 
 # Accessorial charge types (the invisible revenue leakage)
 ACCESSORIALS: list[dict[str, Any]] = [
-    {"type": "Tiempo de espera / Waiting time",  "min_eur": 25.0,  "max_eur": 150.0, "frequency": 0.35},
-    {"type": "Elevador trasero / Tail-lift",      "min_eur": 15.0,  "max_eur": 45.0,  "frequency": 0.20},
-    {"type": "Entrega en obra / Site delivery",   "min_eur": 30.0,  "max_eur": 80.0,  "frequency": 0.15},
-    {"type": "Mercancía ADR / Hazmat surcharge",  "min_eur": 50.0,  "max_eur": 200.0, "frequency": 0.08},
-    {"type": "Recogida fuera de ruta / Detour",   "min_eur": 20.0,  "max_eur": 120.0, "frequency": 0.12},
-    {"type": "Descarga manual / Manual unload",   "min_eur": 15.0,  "max_eur": 60.0,  "frequency": 0.10},
+    {
+        "type": "Tiempo de espera / Waiting time",
+        "min_eur": 25.0,
+        "max_eur": 150.0,
+        "frequency": 0.35,
+    },
+    {"type": "Elevador trasero / Tail-lift", "min_eur": 15.0, "max_eur": 45.0, "frequency": 0.20},
+    {
+        "type": "Entrega en obra / Site delivery",
+        "min_eur": 30.0,
+        "max_eur": 80.0,
+        "frequency": 0.15,
+    },
+    {
+        "type": "Mercancía ADR / Hazmat surcharge",
+        "min_eur": 50.0,
+        "max_eur": 200.0,
+        "frequency": 0.08,
+    },
+    {
+        "type": "Recogida fuera de ruta / Detour",
+        "min_eur": 20.0,
+        "max_eur": 120.0,
+        "frequency": 0.12,
+    },
+    {
+        "type": "Descarga manual / Manual unload",
+        "min_eur": 15.0,
+        "max_eur": 60.0,
+        "frequency": 0.10,
+    },
 ]
 
 # Cargo types typical of Catalan logistics
@@ -168,26 +287,38 @@ PLATE_PREFIXES: list[str] = ["B", "T", "GI", "L"]  # Catalan province codes
 
 # Driver names
 DRIVER_NAMES: list[str] = [
-    "Joan García", "Pere Martínez", "Marc López", "Jordi Fernández",
-    "Albert Sánchez", "Xavier Rodríguez", "Carles Muñoz", "David Jiménez",
-    "Sergi Ruiz", "Àlex Hernández", "Miquel Torres", "Pau Ramírez",
-    "Arnau Díaz", "Oriol Moreno", "Roger Álvarez",
+    "Joan García",
+    "Pere Martínez",
+    "Marc López",
+    "Jordi Fernández",
+    "Albert Sánchez",
+    "Xavier Rodríguez",
+    "Carles Muñoz",
+    "David Jiménez",
+    "Sergi Ruiz",
+    "Àlex Hernández",
+    "Miquel Torres",
+    "Pau Ramírez",
+    "Arnau Díaz",
+    "Oriol Moreno",
+    "Roger Álvarez",
 ]
 
 # Date format variations to inject chaos
 DATE_FORMATS: list[str] = [
-    "%d/%m/%Y",       # DD/MM/YYYY — Standard Spanish
-    "%m-%d-%y",       # MM-DD-YY — American (the killer)
-    "%Y.%m.%d",       # YYYY.MM.DD — ISO-ish but with dots
-    "%d-%b-%Y",       # DD-MMM-YYYY — e.g., 15-Mar-2024
-    "%d.%m.%Y",       # DD.MM.YYYY — German style
-    "%d %m %Y",       # DD MM YYYY — Space separated (cursed)
+    "%d/%m/%Y",  # DD/MM/YYYY — Standard Spanish
+    "%m-%d-%y",  # MM-DD-YY — American (the killer)
+    "%Y.%m.%d",  # YYYY.MM.DD — ISO-ish but with dots
+    "%d-%b-%Y",  # DD-MMM-YYYY — e.g., 15-Mar-2024
+    "%d.%m.%Y",  # DD.MM.YYYY — German style
+    "%d %m %Y",  # DD MM YYYY — Space separated (cursed)
 ]
 
 
 # ---------------------------------------------------------------------------
 # Generator Functions
 # ---------------------------------------------------------------------------
+
 
 def _pick_entity_name(canonical: str, rng: random.Random) -> str:
     """Return canonical name or a 'dirty' variant based on configured rate."""
@@ -248,7 +379,7 @@ def _maybe_null(value: Any, rng: random.Random, rate: float = MISSING_FIELD_RATE
 
 def _generate_plate(rng: random.Random) -> str:
     """Generate a realistic Spanish vehicle plate number."""
-    prefix = rng.choice(PLATE_PREFIXES)
+    _ = rng.choice(PLATE_PREFIXES)
     number = rng.randint(1000, 9999)
     suffix = "".join(rng.choices("BCDFGHJKLMNPRSTVWXYZ", k=3))
     return f"{number} {suffix}"
@@ -301,7 +432,12 @@ def _compute_invoice_amount(
         # duplicate_line handled at row level
 
     invoiced_total = base_amount + (accessorial_value if accessorial_billed else 0.0)
-    return round(invoiced_total, 2), round(true_cost, 2), round(accessorial_value, 2), accessorial_billed
+    return (
+        round(invoiced_total, 2),
+        round(true_cost, 2),
+        round(accessorial_value, 2),
+        accessorial_billed,
+    )
 
 
 def generate_dataset(
@@ -345,69 +481,74 @@ def generate_dataset(
         # --- Build the messy record ---
         record: dict[str, Any] = {
             # Invoice metadata
-            "Nº Factura": _maybe_null(f"FAC-{2025}-{i+1:05d}", rng, rate=0.02),
+            "Nº Factura": _maybe_null(f"FAC-{2025}-{i + 1:05d}", rng, rate=0.02),
             "Fecha Factura": _format_date_messy(invoice_date, rng),
             "Fecha Entrega": _format_date_messy(
                 invoice_date + timedelta(days=rng.randint(0, 3)), rng
             ),
-
             # Entity fields (with dirty variants)
             "Proveedor / Supplier": _pick_entity_name(supplier, rng),
             "Cliente / Customer": _maybe_null(
                 fake.company() + rng.choice([" S.L.", " S.A.", " SL", ""]),
                 rng,
             ),
-            "CIF Proveedor": _maybe_null(
-                f"B{rng.randint(10000000, 99999999)}", rng, rate=0.10
-            ),
-
+            "CIF Proveedor": _maybe_null(f"B{rng.randint(10000000, 99999999)}", rng, rate=0.10),
             # Route data
             "Origen": _maybe_null(route["origin"], rng, rate=0.03),
             "Destino": _maybe_null(route["dest"], rng, rate=0.03),
             "Km": _maybe_null(
                 route["km"] + rng.randint(-15, 15),  # Slight km variations
-                rng, rate=0.05,
+                rng,
+                rate=0.05,
             ),
-
             # Cargo details
             "Tipo Mercancía": _maybe_null(rng.choice(CARGO_TYPES), rng),
             "Peso (kg)": _maybe_null(
                 _format_amount_messy(weight_kg, rng),
-                rng, rate=0.06,
+                rng,
+                rate=0.06,
             ),
             "Nº Palets": _maybe_null(rng.randint(1, 33), rng, rate=0.12),
-
             # Vehicle & driver
             "Matrícula": _maybe_null(_generate_plate(rng), rng, rate=0.15),
             "Conductor": _maybe_null(rng.choice(DRIVER_NAMES), rng, rate=0.10),
-
             # Financial fields (the core of margin analysis)
             "Importe Facturado (€)": _format_amount_messy(invoiced, rng),
             "Coste Real Estimado (€)": _maybe_null(
                 _format_amount_messy(true_cost, rng),
-                rng, rate=0.40,  # 40% missing — most companies don't track true cost!
+                rng,
+                rate=0.40,  # 40% missing — most companies don't track true cost!
             ),
             "Suplementos / Accessorials (€)": _format_amount_messy(
                 accessorial_val if acc_billed else 0.0, rng
             ),
             "Suplementos Reales Incurridos (€)": _maybe_null(
                 _format_amount_messy(accessorial_val, rng),
-                rng, rate=0.55,  # 55% missing — the hidden leakage
+                rng,
+                rate=0.55,  # 55% missing — the hidden leakage
             ),
-
             # Payment tracking
-            "Estado Pago": rng.choice([
-                "Pagado", "Pendiente", "Vencido", "Parcial",
-                "pagado", "PAGADO", "Pdte.", "pdte",  # Inconsistent casing
-            ]),
+            "Estado Pago": rng.choice(
+                [
+                    "Pagado",
+                    "Pendiente",
+                    "Vencido",
+                    "Parcial",
+                    "pagado",
+                    "PAGADO",
+                    "Pdte.",
+                    "pdte",  # Inconsistent casing
+                ]
+            ),
             "Días Vencimiento": _maybe_null(rng.choice([30, 60, 90, 45, 15]), rng),
-
             # Metadata for analysis (would not exist in real data — ground truth)
             "_ruta_rentable": route["profitable"],
             "_suplemento_facturado": acc_billed,
             "_coste_real_numerico": true_cost,
             "_importe_numerico": invoiced,
-            "_margen_real": round(invoiced - true_cost - (accessorial_val if not acc_billed else 0), 2),
+            "_margen_real": round(
+                invoiced - true_cost - (accessorial_val if not acc_billed else 0), 2
+            ),
         }
 
         records.append(record)
@@ -524,14 +665,16 @@ def export_to_excel(
         worksheet = writer.sheets["Facturas Transporte"]
 
         # Format headers to look like a real company spreadsheet
-        header_fmt = workbook.add_format({
-            "bold": True,
-            "bg_color": "#4472C4",
-            "font_color": "#FFFFFF",
-            "border": 1,
-            "text_wrap": True,
-            "font_size": 10,
-        })
+        header_fmt = workbook.add_format(
+            {
+                "bold": True,
+                "bg_color": "#4472C4",
+                "font_color": "#FFFFFF",
+                "border": 1,
+                "text_wrap": True,
+                "font_size": 10,
+            }
+        )
         for col_idx, col_name in enumerate(export_df.columns):
             worksheet.write(0, col_idx, col_name, header_fmt)
             # Auto-width (approximate)
@@ -555,7 +698,9 @@ Examples:
         """,
     )
     parser.add_argument("--rows", type=int, default=DEFAULT_ROWS, help="Number of rows to generate")
-    parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="Random seed for reproducibility")
+    parser.add_argument(
+        "--seed", type=int, default=DEFAULT_SEED, help="Random seed for reproducibility"
+    )
     parser.add_argument("--output", type=str, default=DEFAULT_OUTPUT, help="Output .xlsx file path")
     parser.add_argument(
         "--ground-truth",
@@ -567,18 +712,18 @@ Examples:
 
     try:
         from rich.console import Console
-        from rich.table import Table
-        console = Console()
-        use_rich = True
+
+        _ = Console()
+        _ = True
     except ImportError:
-        console = None
-        use_rich = False
+        _ = None
+        _ = False
 
     # --- Generate ---
-    print(f"\n{'='*70}")
-    print(f"  PROJECT NEXUS — Synthetic Data Generator")
+    print(f"\n{'=' * 70}")
+    print("  PROJECT NEXUS — Synthetic Data Generator")
     print(f"  Generating {args.rows:,} messy freight invoices (seed={args.seed})")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
     df = generate_dataset(num_rows=args.rows, seed=args.seed)
     stats = compute_dataset_statistics(df)
@@ -595,8 +740,8 @@ Examples:
     # --- Report ---
     print(f"  Output:     {output_path.resolve()}")
     print(f"  Ground Truth: {gt_path.resolve()}")
-    print(f"\n  Dataset Statistics:")
-    print(f"  {'─'*50}")
+    print("\n  Dataset Statistics:")
+    print(f"  {'─' * 50}")
     print(f"  Total rows:                    {stats['total_rows']:,}")
     print(f"  Unprofitable route %:          {stats['unprofitable_route_pct']}%")
     print(f"  Unbilled accessorial %:        {stats['unbilled_accessorial_pct']}%")
@@ -604,13 +749,13 @@ Examples:
     print(f"  Negative margin rows %:        {stats['negative_margin_pct']}%")
     print(f"  Average margin per shipment:   €{stats['avg_margin_eur']:,.2f}")
     print(f"  Median margin per shipment:    €{stats['median_margin_eur']:,.2f}")
-    print(f"\n  Key null rates:")
+    print("\n  Key null rates:")
     for col, rate in sorted(stats["null_rates"].items(), key=lambda x: -x[1])[:8]:
         print(f"    {col:40s} {rate:.1f}%")
 
-    print(f"\n  {'='*70}")
-    print(f"  ✓ Dataset generated successfully. Ready for profiling pipeline.")
-    print(f"  {'='*70}\n")
+    print(f"\n  {'=' * 70}")
+    print("  ✓ Dataset generated successfully. Ready for profiling pipeline.")
+    print(f"  {'=' * 70}\n")
 
 
 if __name__ == "__main__":

@@ -21,14 +21,13 @@ import json
 import sys
 import time
 from collections import defaultdict
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from rapidfuzz import fuzz, process
-
+from rapidfuzz import fuzz
 
 # ──────────────────────────────────────────────────────────────
 # Data Classes (Typed Output Structures)
@@ -155,7 +154,9 @@ class ProfilingReport:
     def to_summary_str(self) -> str:
         """Generate the 3-sentence executive summary for the audit dashboard."""
         entity_dupes = sum(ea.duplicate_entity_count for ea in self.entity_analyses)
-        anomaly_count = sum(aa.outlier_count + aa.zero_count + aa.negative_count for aa in self.anomaly_analyses)
+        anomaly_count = sum(
+            aa.outlier_count + aa.zero_count + aa.negative_count for aa in self.anomaly_analyses
+        )
 
         lines = [
             f"We analyzed {self.total_rows:,} records across {self.total_columns} columns.",
@@ -194,7 +195,7 @@ class ProfilingReport:
 
         # Entity Analysis
         if self.entity_analyses:
-            lines.append(f"  ENTITY ANALYSIS")
+            lines.append("  ENTITY ANALYSIS")
             lines.append(sep)
             for ea in self.entity_analyses:
                 lines.append(
@@ -207,14 +208,13 @@ class ProfilingReport:
                     if len(cluster.variants) > 4:
                         variants_str += f", +{len(cluster.variants) - 4} more"
                     lines.append(
-                        f"    [{cluster.confidence.upper()}] "
-                        f"'{cluster.canonical}' ← {variants_str}"
+                        f"    [{cluster.confidence.upper()}] '{cluster.canonical}' ← {variants_str}"
                     )
             lines.append("")
 
         # Anomaly Analysis
         if self.anomaly_analyses:
-            lines.append(f"  ANOMALY ANALYSIS")
+            lines.append("  ANOMALY ANALYSIS")
             lines.append(sep)
             for aa in self.anomaly_analyses:
                 lines.append(
@@ -231,12 +231,10 @@ class ProfilingReport:
 
         # Findings
         if self.findings:
-            lines.append(f"  SURPRISE FINDINGS")
+            lines.append("  SURPRISE FINDINGS")
             lines.append(sep)
             for i, f in enumerate(self.findings, 1):
-                lines.append(
-                    f"  {i}. [{f.confidence.upper()}] {f.description}"
-                )
+                lines.append(f"  {i}. [{f.confidence.upper()}] {f.description}")
                 lines.append(
                     f"     Estimated Impact: €{f.estimated_eur_impact:,.0f} "
                     f"({f.rows_affected:,} rows affected)"
@@ -244,14 +242,13 @@ class ProfilingReport:
             lines.append("")
             lines.append(sep)
             lines.append(
-                f"  TOTAL ESTIMATED ANNUAL IMPACT: "
-                f"€{self.total_estimated_impact_eur:,.0f}"
+                f"  TOTAL ESTIMATED ANNUAL IMPACT: €{self.total_estimated_impact_eur:,.0f}"
             )
             lines.append(sep)
 
         # Executive Summary
         lines.append("")
-        lines.append(f"  EXECUTIVE SUMMARY")
+        lines.append("  EXECUTIVE SUMMARY")
         lines.append(f"  {self.to_summary_str()}")
         lines.append("")
 
@@ -264,26 +261,83 @@ class ProfilingReport:
 
 # Common Spanish column name patterns for entity detection
 ENTITY_KEYWORDS = [
-    "proveedor", "supplier", "cliente", "customer", "empresa", "company",
-    "transportista", "carrier", "nombre", "name", "destinatario", "remitente",
-    "fabricante", "manufacturer", "distribuidor", "distributor", "razón social",
-    "razon_social", "entidad",
+    "proveedor",
+    "supplier",
+    "cliente",
+    "customer",
+    "empresa",
+    "company",
+    "transportista",
+    "carrier",
+    "nombre",
+    "name",
+    "destinatario",
+    "remitente",
+    "fabricante",
+    "manufacturer",
+    "distribuidor",
+    "distributor",
+    "razón social",
+    "razon_social",
+    "entidad",
 ]
 
 # Common Spanish column name patterns for financial detection
 FINANCIAL_KEYWORDS = [
-    "importe", "amount", "precio", "price", "coste", "cost", "total",
-    "factura", "invoice", "tarifa", "rate", "margen", "margin", "iva",
-    "subtotal", "descuento", "discount", "cargo", "charge", "recargo",
-    "surcharge", "base_imponible", "neto", "bruto", "beneficio", "profit",
-    "gasto", "expense", "ingreso", "revenue", "eur", "€",
+    "importe",
+    "amount",
+    "precio",
+    "price",
+    "coste",
+    "cost",
+    "total",
+    "factura",
+    "invoice",
+    "tarifa",
+    "rate",
+    "margen",
+    "margin",
+    "iva",
+    "subtotal",
+    "descuento",
+    "discount",
+    "cargo",
+    "charge",
+    "recargo",
+    "surcharge",
+    "base_imponible",
+    "neto",
+    "bruto",
+    "beneficio",
+    "profit",
+    "gasto",
+    "expense",
+    "ingreso",
+    "revenue",
+    "eur",
+    "€",
 ]
 
 # Date column keywords
 DATE_KEYWORDS = [
-    "fecha", "date", "dia", "day", "mes", "month", "año", "year",
-    "periodo", "period", "vencimiento", "due", "emision", "created",
-    "modified", "updated", "entrega", "delivery",
+    "fecha",
+    "date",
+    "dia",
+    "day",
+    "mes",
+    "month",
+    "año",
+    "year",
+    "periodo",
+    "period",
+    "vencimiento",
+    "due",
+    "emision",
+    "created",
+    "modified",
+    "updated",
+    "entrega",
+    "delivery",
 ]
 
 
@@ -336,7 +390,14 @@ def _detect_eu_decimal_format(series: pd.Series) -> int:
         val_str = str(val).strip()
         # EU format: digits, optional dot thousands sep, comma decimal sep
         # e.g., "1.234,56" or "234,56"
-        if "," in val_str and val_str.replace(".", "").replace(",", "").replace("-", "").replace(" ", "").isdigit():
+        if (
+            "," in val_str
+            and val_str.replace(".", "")
+            .replace(",", "")
+            .replace("-", "")
+            .replace(" ", "")
+            .isdigit()
+        ):
             parts = val_str.split(",")
             if len(parts) == 2 and len(parts[1]) <= 2:
                 count += 1
@@ -501,9 +562,7 @@ def compute_uniqueness_score(df: pd.DataFrame) -> tuple[float, int, int]:
     return score, exact_dups, near_dups
 
 
-def compute_health_score(
-    completeness: float, consistency: float, uniqueness: float
-) -> float:
+def compute_health_score(completeness: float, consistency: float, uniqueness: float) -> float:
     """
     Weighted composite Data Health Score (0–100).
     Weights: completeness 40%, consistency 30%, uniqueness 30%.
@@ -591,9 +650,7 @@ def cluster_entities(
     return clusters
 
 
-def analyze_entities(
-    df: pd.DataFrame, entity_columns: list[str]
-) -> list[EntityAnalysis]:
+def analyze_entities(df: pd.DataFrame, entity_columns: list[str]) -> list[EntityAnalysis]:
     """Run entity clustering on all detected entity columns."""
     analyses = []
     for col in entity_columns:
@@ -631,7 +688,7 @@ def _coerce_to_numeric(series: pd.Series) -> pd.Series:
         return series
 
     # Try EU format conversion: replace dots (thousands) and commas (decimal)
-    def try_parse(val: Any) -> Optional[float]:
+    def try_parse(val: Any) -> float | None:
         if pd.isna(val):
             return np.nan
         s = str(val).strip().replace(" ", "").replace("€", "").replace("EUR", "")
@@ -661,9 +718,7 @@ def _coerce_to_numeric(series: pd.Series) -> pd.Series:
     return series.apply(try_parse)
 
 
-def detect_anomalies(
-    df: pd.DataFrame, financial_columns: list[str]
-) -> list[AnomalyAnalysis]:
+def detect_anomalies(df: pd.DataFrame, financial_columns: list[str]) -> list[AnomalyAnalysis]:
     """Run IQR-based anomaly detection on all financial columns."""
     analyses = []
     for col in financial_columns:
@@ -837,7 +892,9 @@ def generate_findings(
                             f"Pricing inconsistency: {len(high_spread)} entities in '{ent_col}' "
                             f"show >10% price variation in '{fin_col}'"
                         ),
-                        estimated_eur_impact=round(avg_spread_eur * 0.25, 2),  # Conservative: 25% of spread is recoverable
+                        estimated_eur_impact=round(
+                            avg_spread_eur * 0.25, 2
+                        ),  # Conservative: 25% of spread is recoverable
                         confidence="medium",
                         rows_affected=total_affected,
                         category="pricing_spread",
@@ -859,7 +916,7 @@ def generate_findings(
             total_amount = entity_totals.sum()
             if total_amount > 0:
                 top_entity_pct = float(entity_totals.iloc[0] / total_amount * 100)
-                top_10_pct = float(entity_totals.head(10).sum() / total_amount * 100)
+                _top_10_pct = float(entity_totals.head(10).sum() / total_amount * 100)
                 if top_entity_pct > 25:
                     findings.append(
                         Finding(
@@ -877,7 +934,16 @@ def generate_findings(
     # ── Finding 4: Negative Margin Rows ──
     # Look for paired cost/revenue columns
     cost_keywords = ["coste", "cost", "gasto", "expense", "compra"]
-    revenue_keywords = ["importe", "amount", "ingreso", "revenue", "venta", "precio", "price", "tarifa"]
+    revenue_keywords = [
+        "importe",
+        "amount",
+        "ingreso",
+        "revenue",
+        "venta",
+        "precio",
+        "price",
+        "tarifa",
+    ]
 
     cost_cols = [c for c in financial_columns if any(kw in c.lower() for kw in cost_keywords)]
     rev_cols = [c for c in financial_columns if any(kw in c.lower() for kw in revenue_keywords)]
@@ -906,7 +972,9 @@ def generate_findings(
     for aa in anomaly_analyses:
         if aa.outlier_count > 0:
             outlier_total = sum(
-                abs(a.value - aa.median) for a in aa.anomalies if a.anomaly_type.startswith("outlier")
+                abs(a.value - aa.median)
+                for a in aa.anomalies
+                if a.anomaly_type.startswith("outlier")
             )
             if outlier_total > 0:
                 findings.append(
@@ -915,7 +983,9 @@ def generate_findings(
                             f"Pricing anomalies in '{aa.column_name}': {aa.outlier_count} values "
                             f"deviate significantly from median (€{aa.median:,.2f})"
                         ),
-                        estimated_eur_impact=round(outlier_total * 0.15, 2),  # 15% assumed recoverable
+                        estimated_eur_impact=round(
+                            outlier_total * 0.15, 2
+                        ),  # 15% assumed recoverable
                         confidence="medium",
                         rows_affected=aa.outlier_count,
                         category="pricing_spread",

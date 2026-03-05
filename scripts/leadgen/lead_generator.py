@@ -26,10 +26,9 @@ import logging
 import os
 import sys
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import requests
 from dotenv import load_dotenv
@@ -42,8 +41,8 @@ APOLLO_API_KEY: str = os.getenv("APOLLO_API_KEY", "")
 HUNTER_API_KEY: str = os.getenv("HUNTER_API_KEY", "")
 
 # Rate-limit delays (seconds) — generous to stay within free tiers
-APOLLO_DELAY: float = 1.5   # Apollo free: ~200 req/day
-HUNTER_DELAY: float = 2.0   # Hunter free: 25 verifications/month
+APOLLO_DELAY: float = 1.5  # Apollo free: ~200 req/day
+HUNTER_DELAY: float = 2.0  # Hunter free: 25 verifications/month
 
 # API base URLs
 APOLLO_BASE: str = "https://api.apollo.io/v1"
@@ -95,9 +94,9 @@ class Lead:
     company_name: str = ""
     contact_name: str = ""
     email: str = ""
-    confidence_score: int = 0        # 0–100 from Hunter verification
-    revenue_est: str = ""            # e.g. "€10M–€20M"
-    vertical: str = ""               # "Logistics" | "Construction Materials"
+    confidence_score: int = 0  # 0–100 from Hunter verification
+    revenue_est: str = ""  # e.g. "€10M–€20M"
+    vertical: str = ""  # "Logistics" | "Construction Materials"
     linkedin_url: str = ""
     email_1_sent: str = ""
     email_1_opened: str = ""
@@ -156,7 +155,7 @@ SEARCH_PROFILES: list[dict] = [
         ],
         "organization_locations": ["Spain, Catalonia"],
         "organization_num_employees_ranges": ["51,200"],
-        "per_page": 15,   # request up to 15 to allow for filtering
+        "per_page": 15,  # request up to 15 to allow for filtering
         "target_count": 10,
     },
     {
@@ -196,15 +195,17 @@ class ApolloClient:
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
         self.session = requests.Session()
-        self.session.headers.update({
-            "Content-Type": "application/json",
-            "Cache-Control": "no-cache",
-            "X-Api-Key": self.api_key  # <--- WE ADDED THIS LINE
-        })
+        self.session.headers.update(
+            {
+                "Content-Type": "application/json",
+                "Cache-Control": "no-cache",
+                "X-Api-Key": self.api_key,  # <--- WE ADDED THIS LINE
+            }
+        )
 
     def search_people(self, profile: dict) -> list[dict]:
         """
-        New 2026 Flow: 
+        New 2026 Flow:
         1. POST /v1/mixed_people/api_search (get IDs)
         2. POST /v1/people/bulk_match (get full profiles with emails)
         """
@@ -231,34 +232,36 @@ class ApolloClient:
             resp.raise_for_status()
             data = resp.json()
             people_partial = data.get("people", [])
-            
+
             # Extract the IDs we need to enrich
             person_ids = [p.get("id") for p in people_partial if p.get("id")]
-            
+
             if not person_ids:
                 log.warning("No person IDs found for %s", profile["label"])
                 return []
-                
+
             log.info("Found %d IDs, now enriching for full profiles...", len(person_ids))
-            
+
             # Step 2: Bulk Match to get full data (Uses Credits)
             enrich_url = f"{APOLLO_BASE}/people/bulk_match"
-            enrich_payload = {
-                "details": [{"id": pid} for pid in person_ids]
-            }
-            
+            enrich_payload = {"details": [{"id": pid} for pid in person_ids]}
+
             # Important: Apollo requires custom headers for auth sometimes
             headers = {"Cache-Control": "no-cache", "Content-Type": "application/json"}
-            
-            enrich_resp = self.session.post(enrich_url, headers=headers, json=enrich_payload, timeout=30)
+
+            enrich_resp = self.session.post(
+                enrich_url, headers=headers, json=enrich_payload, timeout=30
+            )
             enrich_resp.raise_for_status()
             enrich_data = enrich_resp.json()
-            
+
             # Extract matched records
             matches = enrich_data.get("matches", [])
             full_people = [match.get("person") for match in matches if match.get("person")]
-            
-            log.info("Apollo returned %d full profiles for '%s'", len(full_people), profile["label"])
+
+            log.info(
+                "Apollo returned %d full profiles for '%s'", len(full_people), profile["label"]
+            )
             return full_people
 
         except requests.exceptions.HTTPError as exc:
@@ -350,7 +353,10 @@ class HunterClient:
         self._verified_count += 1
         log.info(
             "Hunter verified %s → score=%d, status=%s  [%d verifications used]",
-            email, score, status, self._verified_count,
+            email,
+            score,
+            status,
+            self._verified_count,
         )
         return score
 
@@ -377,8 +383,9 @@ class HunterClient:
             resp.raise_for_status()
             data = resp.json()
         except requests.exceptions.RequestException as exc:
-            log.error("Hunter email-finder failed for %s %s @ %s: %s",
-                      first_name, last_name, domain, exc)
+            log.error(
+                "Hunter email-finder failed for %s %s @ %s: %s", first_name, last_name, domain, exc
+            )
             return ("", 0)
 
         result = data.get("data", {})
@@ -423,16 +430,12 @@ def run_pipeline() -> None:
 
     # ── Validate keys ──
     if not APOLLO_API_KEY:
-        log.error(
-            "APOLLO_API_KEY is missing. "
-            "Create a .env file with your key (see .env.example)."
-        )
+        log.error("APOLLO_API_KEY is missing. Create a .env file with your key (see .env.example).")
         sys.exit(1)
 
     if not HUNTER_API_KEY:
         log.warning(
-            "HUNTER_API_KEY is missing. "
-            "Emails will NOT be verified — Confidence Score will be 0."
+            "HUNTER_API_KEY is missing. Emails will NOT be verified — Confidence Score will be 0."
         )
 
     apollo = ApolloClient(APOLLO_API_KEY)
@@ -461,7 +464,9 @@ def run_pipeline() -> None:
         all_leads.extend(leads)
         log.info(
             "Collected %d qualified leads for '%s' (running total: %d)",
-            len(leads), profile["label"], len(all_leads),
+            len(leads),
+            profile["label"],
+            len(all_leads),
         )
 
     # ── Phase 2: Deduplication ──
@@ -469,7 +474,9 @@ def run_pipeline() -> None:
     all_leads = deduplicate_leads(all_leads)
     log.info(
         "Deduplication: %d → %d leads (%d removed)",
-        pre_dedup, len(all_leads), pre_dedup - len(all_leads),
+        pre_dedup,
+        len(all_leads),
+        pre_dedup - len(all_leads),
     )
 
     # ── Phase 3: Email Verification via Hunter ──
@@ -509,9 +516,11 @@ def run_pipeline() -> None:
     log.info("PIPELINE COMPLETE")
     log.info("=" * 60)
     log.info("Total leads:       %d", len(all_leads))
-    log.info("  Logistics:       %d", sum(1 for l in all_leads if l.vertical == "Logistics"))
-    log.info("  Construction:    %d", sum(1 for l in all_leads if l.vertical == "Construction Materials"))
-    log.info("  Verified:        %d", sum(1 for l in all_leads if l.confidence_score > 0))
+    log.info("  Logistics:       %d", sum(1 for ld in all_leads if ld.vertical == "Logistics"))
+    log.info(
+        "  Construction:    %d", sum(1 for ld in all_leads if ld.vertical == "Construction Materials")
+    )
+    log.info("  Verified:        %d", sum(1 for ld in all_leads if ld.confidence_score > 0))
     log.info("Output file:       %s", output_path.resolve())
     log.info("")
     log.info("Next step: Open %s, review leads, begin prospect", OUTPUT_FILE)

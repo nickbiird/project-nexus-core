@@ -15,6 +15,10 @@ Run: pytest tests/unit/etl/test_excel_profiler.py -v
 from __future__ import annotations
 
 import json
+
+# Import the profiling engine modules
+# Adjust import path based on your project structure
+import sys
 import tempfile
 from pathlib import Path
 
@@ -22,30 +26,21 @@ import numpy as np
 import pandas as pd
 import pytest
 
-# Import the profiling engine modules
-# Adjust import path based on your project structure
-import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from src.etl.profilers.excel_profiler import (
-    ColumnProfile,
-    EntityCluster,
-    Finding,
     ProfilingReport,
     analyze_entities,
     cluster_entities,
     compute_completeness_score,
-    compute_consistency_score,
     compute_health_score,
     compute_uniqueness_score,
     detect_anomalies,
     generate_findings,
     infer_column_type,
-    load_file,
     profile_columns,
     profile_excel,
 )
-
 
 # ──────────────────────────────────────────────────────────────
 # Fixtures
@@ -58,46 +53,109 @@ def sample_logistics_df() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "numero_factura": [
-                "FAC-001", "FAC-002", "FAC-003", "FAC-004", "FAC-005",
-                "FAC-006", "FAC-007", "FAC-008", "FAC-009", "FAC-010",
+                "FAC-001",
+                "FAC-002",
+                "FAC-003",
+                "FAC-004",
+                "FAC-005",
+                "FAC-006",
+                "FAC-007",
+                "FAC-008",
+                "FAC-009",
+                "FAC-010",
                 "FAC-002",  # Duplicate invoice number
-                "FAC-011", "FAC-012",
+                "FAC-011",
+                "FAC-012",
             ],
             "proveedor": [
-                "Transportes Garcia S.L.", "Trans. Garcia", "GARCIA SL",
-                "Transportes Martinez S.L.", "Martínez S.L.", "Martnez SL",
-                "Logística Pérez S.A.", "Logistica Perez", "Pérez S.A.",
-                "Transportes Lopez", "Trans. Garcia",
-                "Iberlogística S.L.", "Iberlogistica",
+                "Transportes Garcia S.L.",
+                "Trans. Garcia",
+                "GARCIA SL",
+                "Transportes Martinez S.L.",
+                "Martínez S.L.",
+                "Martnez SL",
+                "Logística Pérez S.A.",
+                "Logistica Perez",
+                "Pérez S.A.",
+                "Transportes Lopez",
+                "Trans. Garcia",
+                "Iberlogística S.L.",
+                "Iberlogistica",
             ],
             "fecha_factura": [
-                "15/01/2025", "2025-01-20", "01-25-2025", "2025/02/01",
-                "10/02/2025", "15/02/2025", "2025-03-01", "03/05/2025",
-                "2025-03-15", "20/03/2025", "2025-01-20",
-                "01/04/2025", "2025-04-10",
+                "15/01/2025",
+                "2025-01-20",
+                "01-25-2025",
+                "2025/02/01",
+                "10/02/2025",
+                "15/02/2025",
+                "2025-03-01",
+                "03/05/2025",
+                "2025-03-15",
+                "20/03/2025",
+                "2025-01-20",
+                "01/04/2025",
+                "2025-04-10",
             ],
             "importe_total": [
-                1500.00, 2200.50, 1800.00, 950.00, 3100.00,
+                1500.00,
+                2200.50,
+                1800.00,
+                950.00,
+                3100.00,
                 25000.00,  # Outlier (very high)
-                1700.00, 0.00,  # Zero value
+                1700.00,
+                0.00,  # Zero value
                 -150.00,  # Negative
-                2000.00, 2200.50,  # Duplicate amount+entity
-                1400.00, 1600.00,
+                2000.00,
+                2200.50,  # Duplicate amount+entity
+                1400.00,
+                1600.00,
             ],
             "coste_operativo": [
-                1200.00, 1800.00, 1600.00, 1100.00, 2500.00,
-                3000.00, 1400.00, 500.00, 200.00, 1500.00, 1800.00,
-                1100.00, 1300.00,
+                1200.00,
+                1800.00,
+                1600.00,
+                1100.00,
+                2500.00,
+                3000.00,
+                1400.00,
+                500.00,
+                200.00,
+                1500.00,
+                1800.00,
+                1100.00,
+                1300.00,
             ],
             "ruta": [
-                "BCN-MAD", "BCN-MAD", "BCN-VAL", "MAD-SEV",
-                "BCN-ZAR", "BCN-MAD", "MAD-BIL", "BCN-VAL",
-                "MAD-SEV", "BCN-ZAR", "BCN-MAD",
-                "BCN-MAD", "MAD-BIL",
+                "BCN-MAD",
+                "BCN-MAD",
+                "BCN-VAL",
+                "MAD-SEV",
+                "BCN-ZAR",
+                "BCN-MAD",
+                "MAD-BIL",
+                "BCN-VAL",
+                "MAD-SEV",
+                "BCN-ZAR",
+                "BCN-MAD",
+                "BCN-MAD",
+                "MAD-BIL",
             ],
             "peso_kg": [
-                1500, None, 2200, 800, None, 1800, 2000, None, 1200,
-                None, 1500, 1700, None,
+                1500,
+                None,
+                2200,
+                800,
+                None,
+                1800,
+                2000,
+                None,
+                1200,
+                None,
+                1500,
+                1700,
+                None,
             ],
         }
     )
