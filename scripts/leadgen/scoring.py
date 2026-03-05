@@ -2,10 +2,16 @@
 Lead priority scoring logic.
 """
 
+import functools
+import logging
+
 from scripts.leadgen.models import Lead, Tier, Vertical
 from scripts.leadgen.normalize import sanitize_company_name
 
+log = logging.getLogger(__name__)
 
+
+@functools.lru_cache(maxsize=1024)
 def compute_icp_score(lead: Lead) -> int:
     """Computes a 0-100 Ideal Customer Profile (ICP) fit score.
 
@@ -67,6 +73,7 @@ def compute_icp_score(lead: Lead) -> int:
     return min(100, total_score)
 
 
+@functools.lru_cache(maxsize=1024)
 def assign_tier(lead: Lead) -> Tier:
     """Assigns a priority tier based on ICP score and Hunter confidence.
 

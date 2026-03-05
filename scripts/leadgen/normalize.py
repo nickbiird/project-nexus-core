@@ -2,7 +2,11 @@
 Data normalization and cleaning functions for raw lead data.
 """
 
+import logging
+
 from scripts.leadgen.models import Vertical
+
+log = logging.getLogger(__name__)
 
 
 def clean_value(val: str) -> str:
@@ -25,9 +29,17 @@ def clean_value(val: str) -> str:
         raise ValueError("Input value must be a string")
 
     # Fix [email](mailto:email) -> email
-    if "](" in val:
-        val = val.split("](")[0].replace("[", "")
-    return val.strip().strip('"').strip()
+    clean_val = val
+    if "](" in clean_val:
+        clean_val = clean_val.split("](")[0].replace("[", "")
+    clean_val = clean_val.strip().strip('"').strip()
+
+    if clean_val != val:
+        log.debug("Cleaned '%s' -> '%s'", val, clean_val)
+    elif not clean_val and val:
+        log.warning("clean_value resulted in empty string for input: '%s'", val)
+
+    return clean_val
 
 
 def extract_email(parts: list[str]) -> str | None:
@@ -157,5 +169,8 @@ def sanitize_company_name(name: str) -> str:
         # Case insensitive match at the beginning
         if clean_name.lower().startswith(title.lower()):
             clean_name = clean_name[len(title) :].strip()
+
+    if clean_name != name:
+        log.debug("Sanitized company name: '%s' -> '%s'", name, clean_name)
 
     return clean_name

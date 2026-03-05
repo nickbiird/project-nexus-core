@@ -32,6 +32,9 @@ class HunterClient:
             free_tier_cap (int, optional): Max verifications per run. Defaults to 25.
             delay_seconds (float, optional): Seconds to sleep between calls. Defaults to 2.0.
         """
+        if not api_key:
+            raise ValueError("Hunter API key cannot be empty.")
+
         self.api_key = api_key
         self.session = requests.Session()
         self.free_tier_cap = free_tier_cap
@@ -68,11 +71,21 @@ class HunterClient:
             return 0
 
         if self._verified_count >= self.free_tier_cap:
+            log.info(
+                "Hunter free tier cap (%d) exceeded — halting verifications", self.free_tier_cap
+            )
             raise HunterCapExceededError(f"Hunter free tier cap of {self.free_tier_cap} exceeded.")
 
         score = self._call_api(email)
 
         self._verified_count += 1
+        log.info(
+            "Verified %s (Score: %d) — %d/%d used",
+            email,
+            score,
+            self._verified_count,
+            self.free_tier_cap,
+        )
 
         # Enforce rate limiting delay
         time.sleep(self.delay_seconds)

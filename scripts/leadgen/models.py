@@ -4,9 +4,9 @@ Data models, enums, constants, and CSV definitions for the Lead Generation Pipel
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import TypedDict
 
 
 class Vertical(StrEnum):
@@ -44,24 +44,24 @@ CSV_HEADERS: list[str] = [
 ]
 
 
-@dataclass
+@dataclass(frozen=True)
 class Lead:
     """Single qualified lead record."""
 
-    company_name: str = ""
-    contact_name: str = ""
-    email: str = ""
-    confidence_score: int = 0  # 0–100 from Hunter verification
-    revenue_est: str = ""  # e.g. "€10M–€20M"
-    vertical: str | Vertical = Vertical.UNKNOWN  # Can be a string or Vertical enum
-    linkedin_url: str = ""
-    email_1_sent: str = ""
-    email_1_opened: str = ""
-    email_2_sent: str = ""
-    email_3_sent: str = ""
-    reply_received: str = ""
-    reply_sentiment: str = ""
-    next_action: str = "Research & Send Email #1"
+    company_name: str = field(default="")
+    contact_name: str = field(default="")
+    email: str = field(default="")
+    confidence_score: int = field(default=0)  # 0–100 from Hunter verification
+    revenue_est: str = field(default="")  # e.g. "€10M–€20M"
+    vertical: Vertical | str = field(default=Vertical.UNKNOWN)  # Can be a string or Vertical enum
+    linkedin_url: str = field(default="")
+    email_1_sent: str = field(default="")
+    email_1_opened: str = field(default="")
+    email_2_sent: str = field(default="")
+    email_3_sent: str = field(default="")
+    reply_received: str = field(default="")
+    reply_sentiment: str = field(default="")
+    next_action: str = field(default="Research & Send Email #1")
 
     def to_row(self) -> list[str]:
         """Return a list matching CSV_HEADERS order."""
@@ -99,7 +99,7 @@ class Lead:
         raw_vertical = row.get("Vertical", "")
         parsed_vertical: str | Vertical = raw_vertical
         for v in Vertical:
-            if v.value.lower() == raw_vertical.lower():
+            if v.lower() == raw_vertical.lower():
                 parsed_vertical = v
                 break
 
@@ -121,7 +121,22 @@ class Lead:
         )
 
 
-SEARCH_PROFILES: list[dict[str, Any]] = [
+class SearchProfile(TypedDict):
+    """Type definition for an Apollo search profile dict."""
+
+    label: str
+    vertical: Vertical
+    revenue_est: str
+    person_titles: list[str]
+    organization_industry_tag_ids: list[str]
+    q_organization_keyword_tags: list[str]
+    organization_locations: list[str]
+    organization_num_employees_ranges: list[str]
+    per_page: int
+    target_count: int
+
+
+SEARCH_PROFILES: list[SearchProfile] = [
     {
         "label": "Logistics",
         "vertical": Vertical.LOGISTICS,

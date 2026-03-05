@@ -35,8 +35,13 @@ def from_apollo_csv(path: Path) -> list[Lead]:
         # Skip header
         next(f, None)
 
-        for line in f:
+        for line_num, line in enumerate(f, start=2):
             if len(line.strip()) < 10:
+                log.warning(
+                    "Skipping line %d (line %d in file): Too short (<10 chars)",
+                    len(leads) + 1,
+                    line_num,
+                )
                 continue
 
             # Raw split since Apollo puts email at index 5 or 6 and quote structure is messy
@@ -50,6 +55,11 @@ def from_apollo_csv(path: Path) -> list[Lead]:
 
             email = extract_email(parts)
             if not email:
+                log.warning(
+                    "Skipping line %d (line %d in file): Unable to parse valid email address",
+                    len(leads) + 1,
+                    line_num,
+                )
                 continue
 
             linkedin = extract_linkedin(parts) or ""
@@ -66,6 +76,7 @@ def from_apollo_csv(path: Path) -> list[Lead]:
                 next_action="Research & Send Email #1",
             )
             leads.append(lead)
+            log.info("Parsed %s (%s)", lead.company_name, lead.email)
 
     return leads
 
