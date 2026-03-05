@@ -108,10 +108,7 @@ class TestResolveVertical:
     # --- 4690 conditional: general wholesale ---
     def test_4690_with_4673_secondary(self) -> None:
         """4690 included when secondary is 4673."""
-        assert (
-            resolve_vertical("4690", cnae_secondary="4673")
-            == Vertical.CONSTRUCTION_MATERIALS
-        )
+        assert resolve_vertical("4690", cnae_secondary="4673") == Vertical.CONSTRUCTION_MATERIALS
 
     def test_4690_with_construction_desc(self) -> None:
         """4690 included when description mentions construction materials."""

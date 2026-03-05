@@ -41,18 +41,27 @@ _SABI_HEADER_SYNONYMS: dict[str, list[str]] = {
     "phone": ["teléfono", "telefono", "phone"],
     "website": ["página web", "pagina web", "web", "website", "url"],
     "cnae_primary": [
-        "código cnae 2009 (primario)", "codigo cnae 2009 (primario)",
-        "cnae primario", "cnae 2009", "cnae primary", "código cnae primario",
+        "código cnae 2009 (primario)",
+        "codigo cnae 2009 (primario)",
+        "cnae primario",
+        "cnae 2009",
+        "cnae primary",
+        "código cnae primario",
         "codigo cnae primario",
     ],
     "cnae_secondary": [
-        "código cnae 2009 (secundario)", "codigo cnae 2009 (secundario)",
-        "cnae secundario", "cnae secondary", "código cnae secundario",
+        "código cnae 2009 (secundario)",
+        "codigo cnae 2009 (secundario)",
+        "cnae secundario",
+        "cnae secondary",
+        "código cnae secundario",
         "codigo cnae secundario",
     ],
     "activity_description": [
-        "descripción actividad", "descripcion actividad",
-        "actividad", "activity description",
+        "descripción actividad",
+        "descripcion actividad",
+        "actividad",
+        "activity description",
     ],
     "revenue_last": [
         "ingresos de explotación (eur mil) — último año",
@@ -60,7 +69,8 @@ _SABI_HEADER_SYNONYMS: dict[str, list[str]] = {
         "ingresos de explotacion (eur mil)",
         "ingresos explotación mil eur",
         "ingresos explotacion mil eur",
-        "cifra de negocios", "operating revenue",
+        "cifra de negocios",
+        "operating revenue",
         "ingresos de explotación",
         "ingresos de explotacion",
     ],
@@ -71,19 +81,24 @@ _SABI_HEADER_SYNONYMS: dict[str, list[str]] = {
     ],
     "ebitda": [
         "ebitda (eur mil) — último año",
-        "ebitda (eur mil)", "ebitda",
+        "ebitda (eur mil)",
+        "ebitda",
     ],
     "net_profit": [
         "resultado del ejercicio (eur mil) — último año",
-        "resultado del ejercicio", "net profit",
+        "resultado del ejercicio",
+        "net profit",
     ],
     "employees": [
         "número empleados — último año",
-        "numero empleados", "número empleados",
-        "employees", "num empleados",
+        "numero empleados",
+        "número empleados",
+        "employees",
+        "num empleados",
     ],
     "incorporation_date": [
-        "fecha constitución", "fecha constitucion",
+        "fecha constitución",
+        "fecha constitucion",
         "incorporation date",
     ],
     "company_status": ["estado", "status", "company status"],
@@ -355,7 +370,7 @@ def from_sabi_xlsx(
             # Strip protocol & trailing slashes
             for prefix in ("https://", "http://", "www."):
                 if website_str.lower().startswith(prefix):
-                    website_str = website_str[len(prefix):]
+                    website_str = website_str[len(prefix) :]
             website_str = website_str.rstrip("/")
             if ";" in website_str:
                 website_str = website_str.split(";")[0].strip()
@@ -424,8 +439,7 @@ def from_sabi_xlsx(
 
     if not deduped:
         raise EmptyExportError(
-            f"SABI file {path.name} yielded 0 leads after filtering "
-            f"({total_rows} rows processed)."
+            f"SABI file {path.name} yielded 0 leads after filtering ({total_rows} rows processed)."
         )
 
     return deduped

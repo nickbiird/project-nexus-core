@@ -27,46 +27,104 @@ log = logging.getLogger(__name__)
 _LEAD_NEXT_ACTION_DEFAULT: str = ""
 for _f in fields(Lead):
     if _f.name == "next_action":
-        _LEAD_NEXT_ACTION_DEFAULT = (
-            _f.default if isinstance(_f.default, str) else ""
-        )
+        _LEAD_NEXT_ACTION_DEFAULT = _f.default if isinstance(_f.default, str) else ""
         break
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-_PERSONAL_DOMAINS: frozenset[str] = frozenset({
-    "gmail.com", "hotmail.com", "yahoo.com", "yahoo.es",
-    "outlook.com", "icloud.com", "me.com",
-})
+_PERSONAL_DOMAINS: frozenset[str] = frozenset(
+    {
+        "gmail.com",
+        "hotmail.com",
+        "yahoo.com",
+        "yahoo.es",
+        "outlook.com",
+        "icloud.com",
+        "me.com",
+    }
+)
 
-_FLAGGED_COUNTRY_TLDS: frozenset[str] = frozenset({
-    ".ar", ".mx", ".cl", ".co.uk", ".fr", ".de", ".it", ".pt",
-})
+_FLAGGED_COUNTRY_TLDS: frozenset[str] = frozenset(
+    {
+        ".ar",
+        ".mx",
+        ".cl",
+        ".co.uk",
+        ".fr",
+        ".de",
+        ".it",
+        ".pt",
+    }
+)
 
-_GENERIC_TLDS: frozenset[str] = frozenset({
-    ".com", ".net", ".org", ".io", ".co",
-})
+_GENERIC_TLDS: frozenset[str] = frozenset(
+    {
+        ".com",
+        ".net",
+        ".org",
+        ".io",
+        ".co",
+    }
+)
 
-_JOB_TITLE_TOKENS: frozenset[str] = frozenset({
-    "director", "directora", "gerente", "responsable",
-    "coordinador", "coordinadora", "jefe", "jefa", "manager",
-    "ceo", "cfo", "coo", "fundador", "fundadora",
-    "propietario", "propietaria",
-})
+_JOB_TITLE_TOKENS: frozenset[str] = frozenset(
+    {
+        "director",
+        "directora",
+        "gerente",
+        "responsable",
+        "coordinador",
+        "coordinadora",
+        "jefe",
+        "jefa",
+        "manager",
+        "ceo",
+        "cfo",
+        "coo",
+        "fundador",
+        "fundadora",
+        "propietario",
+        "propietaria",
+    }
+)
 
-_SAAS_TOKENS: frozenset[str] = frozenset({
-    "software", "saas", "platform", "app", "cloud", "tech",
-    "digital", "data", "analytics", "ai", "api",
-    "ecommerce", "e-commerce",
-})
+_SAAS_TOKENS: frozenset[str] = frozenset(
+    {
+        "software",
+        "saas",
+        "platform",
+        "app",
+        "cloud",
+        "tech",
+        "digital",
+        "data",
+        "analytics",
+        "ai",
+        "api",
+        "ecommerce",
+        "e-commerce",
+    }
+)
 
-_INFRA_TOKENS: frozenset[str] = frozenset({
-    "PORT", "PORTS", "TERMINAL", "TERMINALS", "AIRPORT",
-    "AEROPORT", "RAIL", "FERROVIARIO", "FERROVIARIA",
-    "MARITIMO", "MARITIMA", "MARÍTIMO", "MARÍTIMA",
-})
+_INFRA_TOKENS: frozenset[str] = frozenset(
+    {
+        "PORT",
+        "PORTS",
+        "TERMINAL",
+        "TERMINALS",
+        "AIRPORT",
+        "AEROPORT",
+        "RAIL",
+        "FERROVIARIO",
+        "FERROVIARIA",
+        "MARITIMO",
+        "MARITIMA",
+        "MARÍTIMO",
+        "MARÍTIMA",
+    }
+)
 
 # Precompiled regex for whole-word job title matching
 _JOB_TITLE_RE = re.compile(
@@ -179,58 +237,79 @@ def _email_domain_prefix(domain: str) -> str:
 def _check_v001(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     """V001 — ERROR — Missing email."""
     if not lead.email.strip():
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V001", severity="ERROR",
-            message=f"Missing email address (lead: {lead.company_name!r})",
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V001",
+                severity="ERROR",
+                message=f"Missing email address (lead: {lead.company_name!r})",
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 def _check_v002(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     """V002 — ERROR — Undeliverable email (Hunter score zero)."""
     if lead.email.strip() and lead.confidence_score == 0:
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V002", severity="ERROR",
-            message=(
-                f"Undeliverable email — Hunter confidence is 0 "
-                f"(email: {lead.email!r})"
-            ),
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V002",
+                severity="ERROR",
+                message=(f"Undeliverable email — Hunter confidence is 0 (email: {lead.email!r})"),
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 def _check_v003(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     """V003 — WARNING — Low Hunter confidence."""
     if lead.email.strip() and 0 < lead.confidence_score < 70:
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V003", severity="WARNING",
-            message=(
-                f"Low Hunter confidence score: {lead.confidence_score} "
-                f"(email: {lead.email!r})"
-            ),
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V003",
+                severity="WARNING",
+                message=(
+                    f"Low Hunter confidence score: {lead.confidence_score} (email: {lead.email!r})"
+                ),
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 def _check_v004(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     """V004 — WARNING — Missing company name."""
     if not lead.company_name.strip():
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V004", severity="WARNING",
-            message="Missing company name",
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V004",
+                severity="WARNING",
+                message="Missing company name",
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 def _check_v005(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     """V005 — WARNING — Personal email domain."""
     domain = _email_domain(lead.email)
     if domain in _PERSONAL_DOMAINS:
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V005", severity="WARNING",
-            message=f"Personal email domain detected: {domain!r}",
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V005",
+                severity="WARNING",
+                message=f"Personal email domain detected: {domain!r}",
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 def _check_v006(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
@@ -241,46 +320,62 @@ def _check_v006(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     # Check if the domain ends with a flagged country-code TLD
     for tld in _FLAGGED_COUNTRY_TLDS:
         if domain.endswith(tld):
-            results.append(ValidationResult(
-                lead_index=idx, rule_id="V006", severity="WARNING",
-                message=(
-                    f"Non-Spain email domain detected: {domain!r} "
-                    f"(ends with {tld!r})"
-                ),
-                auto_fixable=False, fix_value=None,
-            ))
+            results.append(
+                ValidationResult(
+                    lead_index=idx,
+                    rule_id="V006",
+                    severity="WARNING",
+                    message=(f"Non-Spain email domain detected: {domain!r} (ends with {tld!r})"),
+                    auto_fixable=False,
+                    fix_value=None,
+                )
+            )
             return
 
 
 def _check_v007(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     """V007 — WARNING — Unknown vertical."""
     if lead.vertical == Vertical.UNKNOWN:
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V007", severity="WARNING",
-            message="Vertical classification is Unknown",
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V007",
+                severity="WARNING",
+                message="Vertical classification is Unknown",
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 def _check_v008(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     """V008 — ADVISORY — Missing LinkedIn URL."""
     if not lead.linkedin_url.strip():
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V008", severity="ADVISORY",
-            message="Missing LinkedIn URL",
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V008",
+                severity="ADVISORY",
+                message="Missing LinkedIn URL",
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 def _check_v009(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     """V009 — ADVISORY — Next action not set."""
     if not lead.next_action.strip():
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V009", severity="ADVISORY",
-            message="Next action is empty",
-            auto_fixable=True,
-            fix_value=_LEAD_NEXT_ACTION_DEFAULT,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V009",
+                severity="ADVISORY",
+                message="Next action is empty",
+                auto_fixable=True,
+                fix_value=_LEAD_NEXT_ACTION_DEFAULT,
+            )
+        )
 
 
 def _check_v010(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
@@ -289,14 +384,16 @@ def _check_v010(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     if not name:
         return
     if _JOB_TITLE_RE.search(name):
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V010", severity="ERROR",
-            message=(
-                f"Company name appears to contain a job title: "
-                f"{lead.company_name!r}"
-            ),
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V010",
+                severity="ERROR",
+                message=(f"Company name appears to contain a job title: {lead.company_name!r}"),
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 def _check_v011(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
@@ -306,14 +403,19 @@ def _check_v011(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
 
     # Check company name
     if _SAAS_RE.search(lead.company_name):
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V011", severity="WARNING",
-            message=(
-                f"Possible SaaS/tech company misclassified as "
-                f"{lead.vertical}: company name {lead.company_name!r}"
-            ),
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V011",
+                severity="WARNING",
+                message=(
+                    f"Possible SaaS/tech company misclassified as "
+                    f"{lead.vertical}: company name {lead.company_name!r}"
+                ),
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
         return
 
     # Check email domain prefix
@@ -321,14 +423,19 @@ def _check_v011(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     if domain:
         prefix = _email_domain_prefix(domain)
         if _SAAS_RE.search(prefix):
-            results.append(ValidationResult(
-                lead_index=idx, rule_id="V011", severity="WARNING",
-                message=(
-                    f"Possible SaaS/tech company misclassified as "
-                    f"{lead.vertical}: email domain prefix {prefix!r}"
-                ),
-                auto_fixable=False, fix_value=None,
-            ))
+            results.append(
+                ValidationResult(
+                    lead_index=idx,
+                    rule_id="V011",
+                    severity="WARNING",
+                    message=(
+                        f"Possible SaaS/tech company misclassified as "
+                        f"{lead.vertical}: email domain prefix {prefix!r}"
+                    ),
+                    auto_fixable=False,
+                    fix_value=None,
+                )
+            )
 
 
 def _check_v012(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
@@ -336,14 +443,19 @@ def _check_v012(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     if lead.vertical != Vertical.LOGISTICS:
         return
     if _INFRA_RE.search(lead.company_name):
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V012", severity="WARNING",
-            message=(
-                f"Possible infrastructure/port operator misclassified as "
-                f"Logistics: {lead.company_name!r}"
-            ),
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V012",
+                severity="WARNING",
+                message=(
+                    f"Possible infrastructure/port operator misclassified as "
+                    f"Logistics: {lead.company_name!r}"
+                ),
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 # --- SABI-specific rules ---
@@ -353,17 +465,17 @@ def _check_v013(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     """V013 — WARNING — Revenue outside ICP range (SABI only)."""
     if lead.source != "sabi":
         return
-    if lead.revenue_eur > 0 and (
-        lead.revenue_eur < 5_000_000 or lead.revenue_eur > 20_000_000
-    ):
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V013", severity="WARNING",
-            message=(
-                f"Revenue €{lead.revenue_eur:,} is outside the "
-                f"ICP range (€5M–€20M)"
-            ),
-            auto_fixable=False, fix_value=None,
-        ))
+    if lead.revenue_eur > 0 and (lead.revenue_eur < 5_000_000 or lead.revenue_eur > 20_000_000):
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V013",
+                severity="WARNING",
+                message=(f"Revenue €{lead.revenue_eur:,} is outside the ICP range (€5M–€20M)"),
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 def _check_v014(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
@@ -371,11 +483,16 @@ def _check_v014(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     if lead.source != "sabi":
         return
     if not lead.revenue_verified:
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V014", severity="ADVISORY",
-            message="SABI revenue is unverified",
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V014",
+                severity="ADVISORY",
+                message="SABI revenue is unverified",
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 def _check_v015(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
@@ -383,14 +500,19 @@ def _check_v015(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     if lead.source != "sabi":
         return
     if lead.employees < 3 and lead.revenue_eur > 5_000_000:
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V015", severity="WARNING",
-            message=(
-                f"Employee count ({lead.employees}) is suspiciously low for "
-                f"revenue €{lead.revenue_eur:,} — likely a holding company"
-            ),
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V015",
+                severity="WARNING",
+                message=(
+                    f"Employee count ({lead.employees}) is suspiciously low for "
+                    f"revenue €{lead.revenue_eur:,} — likely a holding company"
+                ),
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 def _check_v016(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
@@ -398,11 +520,16 @@ def _check_v016(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     if lead.source != "sabi":
         return
     if not lead.website.strip():
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V016", severity="ADVISORY",
-            message="No website — blocks Hunter domain search",
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V016",
+                severity="ADVISORY",
+                message="No website — blocks Hunter domain search",
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 # --- Apollo-specific rule ---
@@ -413,19 +540,37 @@ def _check_v017(lead: Lead, idx: int, results: list[ValidationResult]) -> None:
     if lead.source != "apollo":
         return
     if not lead.revenue_est.strip():
-        results.append(ValidationResult(
-            lead_index=idx, rule_id="V017", severity="ADVISORY",
-            message="Missing revenue estimate",
-            auto_fixable=False, fix_value=None,
-        ))
+        results.append(
+            ValidationResult(
+                lead_index=idx,
+                rule_id="V017",
+                severity="ADVISORY",
+                message="Missing revenue estimate",
+                auto_fixable=False,
+                fix_value=None,
+            )
+        )
 
 
 # Ordered list of all rule checkers
 _ALL_RULES = [
-    _check_v001, _check_v002, _check_v003, _check_v004, _check_v005,
-    _check_v006, _check_v007, _check_v008, _check_v009, _check_v010,
-    _check_v011, _check_v012, _check_v013, _check_v014, _check_v015,
-    _check_v016, _check_v017,
+    _check_v001,
+    _check_v002,
+    _check_v003,
+    _check_v004,
+    _check_v005,
+    _check_v006,
+    _check_v007,
+    _check_v008,
+    _check_v009,
+    _check_v010,
+    _check_v011,
+    _check_v012,
+    _check_v013,
+    _check_v014,
+    _check_v015,
+    _check_v016,
+    _check_v017,
 ]
 
 

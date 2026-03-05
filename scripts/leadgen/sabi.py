@@ -46,7 +46,7 @@ def parse_sabi_revenue(raw_value: Any) -> int | None:
         return None
 
     # Spanish locale: period = thousands separator, comma = decimal
-    s = s.replace(".", "")   # strip thousands separator
+    s = s.replace(".", "")  # strip thousands separator
     s = s.replace(",", ".")  # decimal comma → decimal point
     try:
         return int(float(s) * 1000)
@@ -123,15 +123,21 @@ CNAE_VERTICAL_MAP: dict[str, tuple[str, bool, str]] = {
 # Pre-computed sets for fast look-up
 _EXCLUDED_PREFIXES = {"EXCLUDED:"}
 _UNCONDITIONAL_CODES: set[str] = {
-    code for code, (_, included, reason) in CNAE_VERTICAL_MAP.items()
+    code
+    for code, (_, included, reason) in CNAE_VERTICAL_MAP.items()
     if included and not any(reason.startswith(p) for p in _EXCLUDED_PREFIXES)
 }
 
 # Keywords that signal a conditional 4675 / 4690 entry is construction-related
 _CONSTRUCTION_KEYWORDS = {
-    "construcción", "construccion", "adhesivos", "impermeabilización",
-    "impermeabilizacion", "materiales de construcción",
-    "materiales de construccion", "building material",
+    "construcción",
+    "construccion",
+    "adhesivos",
+    "impermeabilización",
+    "impermeabilizacion",
+    "materiales de construcción",
+    "materiales de construccion",
+    "building material",
     "construction material",
 }
 

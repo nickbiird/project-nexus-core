@@ -600,9 +600,9 @@ class TestCrossCutting:
         """One lead that fires ERROR, WARNING, and ADVISORY simultaneously."""
         lead = _clean_apollo_lead(
             email="test@empresa.es",
-            confidence_score=0,       # V002 ERROR
+            confidence_score=0,  # V002 ERROR
             vertical=Vertical.UNKNOWN,  # V007 WARNING
-            linkedin_url="",           # V008 ADVISORY
+            linkedin_url="",  # V008 ADVISORY
         )
         report, _ = validate_leads([lead])
         assert len(report.errors) >= 1
