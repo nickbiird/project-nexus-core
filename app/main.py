@@ -4,7 +4,7 @@ A premium, schema-less data quality audit tool for the Free Audit Hook.
 Upload any Excel/CSV → get a branded profiling report with € impact findings
 presented as a "Margin Leakage" narrative with Plotly waterfall chart.
 
-Run: streamlit run app/app.py
+Run: streamlit run app/main.py
 """
 
 from __future__ import annotations
