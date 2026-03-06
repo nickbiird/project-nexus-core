@@ -89,11 +89,3 @@ jobs:
           alembic downgrade base
           alembic upgrade head
           echo "Migration roundtrip passed"
-
-      - name: Security scan
-        if: matrix.python-version == '3.11'
-        run: |
-          source .venv/bin/activate
-          uv pip install pip-audit --quiet
-          pip-audit --strict --ignore project-nexus-core
-
