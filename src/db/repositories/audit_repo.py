@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import select
 
@@ -34,7 +34,7 @@ class AuditRepository(BaseRepository):
 
         Uses ``session.get()`` for efficient identity-map lookup.
         """
-        return self._session.get(Audit, audit_id)
+        return cast(Audit | None, self._session.get(Audit, audit_id))
 
     def get_by_file_hash(self, file_hash: str) -> Audit | None:
         """Return a previously cached audit matching *file_hash*, or ``None``.
@@ -44,7 +44,7 @@ class AuditRepository(BaseRepository):
         result.  The ``file_hash`` column is ``unique=True`` and indexed.
         """
         stmt = select(Audit).where(Audit.file_hash == file_hash)
-        return self._session.execute(stmt).scalar_one_or_none()
+        return cast(Audit | None, self._session.execute(stmt).scalar_one_or_none())  # type: ignore[redundant-cast]
 
     def list_by_client(self, client_id: uuid.UUID) -> Sequence[Audit]:
         """Return all audits for *client_id*, newest first.
@@ -53,7 +53,7 @@ class AuditRepository(BaseRepository):
         recent audit appears at index 0.
         """
         stmt = select(Audit).where(Audit.client_id == client_id).order_by(Audit.created_at.desc())
-        return self._session.execute(stmt).scalars().all()
+        return cast(Sequence[Audit], self._session.execute(stmt).scalars().all())  # type: ignore[redundant-cast]
 
     def save_audit_report(
         self,

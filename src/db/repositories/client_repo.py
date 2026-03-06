@@ -9,6 +9,7 @@ SQLAlchemy 2.0 ``select()`` API and receive a session via ``BaseRepository``.
 from __future__ import annotations
 
 import uuid
+from typing import cast
 
 from sqlalchemy import select
 
@@ -25,7 +26,7 @@ class ClientRepository(BaseRepository):
 
         Uses ``session.get()`` for efficient identity-map lookup.
         """
-        return self._session.get(Client, client_id)
+        return cast(Client | None, self._session.get(Client, client_id))
 
     def get_by_company_name(self, company_name: str) -> Client | None:
         """Return the client matching *company_name*, or ``None``.
@@ -34,7 +35,7 @@ class ClientRepository(BaseRepository):
         ``Client.company_name``.
         """
         stmt = select(Client).where(Client.company_name == company_name)
-        return self._session.execute(stmt).scalar_one_or_none()
+        return cast(Client | None, self._session.execute(stmt).scalar_one_or_none())  # type: ignore[redundant-cast]
 
     def create_client(
         self,
