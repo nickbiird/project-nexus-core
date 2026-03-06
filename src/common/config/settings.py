@@ -39,20 +39,8 @@ class NexusSettings(BaseSettings):
     llm_temperature: float = 0.0
     llm_max_tokens: int = 4096
 
-    # --- PostgreSQL ---
-    postgres_host: str = "localhost"
-    postgres_port: int = 5432
-    postgres_db: str = "nexus_warehouse"
-    postgres_user: str = "nexus_admin"
-    postgres_password: str = "CHANGE_ME_IN_PRODUCTION"
-
-    @property
-    def database_url(self) -> str:
-        """Construct PostgreSQL connection URL."""
-        return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-        )
+    # --- Database ---
+    database_url: str = "sqlite:///data/yellowbird.db"
 
     # --- WhatsApp ---
     whatsapp_provider: Literal["360dialog", "twilio"] = "360dialog"
