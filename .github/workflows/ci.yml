@@ -84,6 +84,7 @@ jobs:
           DATABASE_URL: sqlite:///tmp/ci_test.db
         run: |
           source .venv/bin/activate
+          mkdir -p data
           alembic upgrade head
           alembic downgrade base
           alembic upgrade head
