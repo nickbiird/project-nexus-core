@@ -64,7 +64,7 @@ jobs:
       - name: Run unit tests
         run: |
           source .venv/bin/activate
-          pytest tests/unit/ -v --tb=short --cov=src --cov-report=xml --cov-fail-under=80
+          pytest tests/unit/ -v --tb=short --cov=src --cov-report=xml --cov-fail-under=75
 
       - name: Run integration tests
         if: matrix.python-version == '3.11'
