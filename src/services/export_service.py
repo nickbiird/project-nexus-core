@@ -9,10 +9,75 @@ or email delivery.
 
 from __future__ import annotations
 
+import contextlib
 from datetime import datetime
 from pathlib import Path
 
-from src.etl.profilers.excel_profiler import ProfilingReport
+import pandas as pd
+
+from src.etl.profilers.excel_profiler import (  # explicit re-exports
+    ProfilingReport as ProfilingReport,
+)
+from src.etl.profilers.excel_profiler import (
+    profile_excel as profile_excel,
+)
+
+
+def compute_gross_revenue(
+    report: ProfilingReport,
+    demo_df: pd.DataFrame | None,
+) -> float:
+    """Derive gross revenue from the first detected financial column.
+
+    Resolution order:
+
+    1. If *demo_df* is provided, sum the financial column directly.
+    2. Fallback: estimate as ``anomaly_analysis.mean × total_rows``
+       for the matching column.
+    3. If neither succeeds, return ``0.0``.
+
+    Args:
+        report: A completed profiling report.
+        demo_df: The demo DataFrame, or ``None`` when a real file
+            was uploaded.
+
+    Returns:
+        The estimated gross revenue in EUR.
+    """
+    gross_revenue = 0.0
+    if not report.detected_financial_columns:
+        return gross_revenue
+
+    fin_col = report.detected_financial_columns[0]
+
+    if demo_df is not None:
+        with contextlib.suppress(Exception):
+            gross_revenue = float(pd.to_numeric(demo_df[fin_col], errors="coerce").sum())
+
+    if gross_revenue == 0.0:
+        for aa in report.anomaly_analyses:
+            if aa.column_name == fin_col:
+                gross_revenue = aa.mean * report.total_rows
+                break
+
+    return gross_revenue
+
+
+def compute_total_anomaly_count(report: ProfilingReport) -> int:
+    """Count all anomalies across every anomaly analysis in *report*.
+
+    Sums ``outlier_count + zero_count + negative_count`` for each
+    financial column that was analysed.
+
+    Args:
+        report: A completed profiling report.
+
+    Returns:
+        The total number of anomalies detected.
+    """
+    return sum(
+        aa.outlier_count + aa.zero_count + aa.negative_count for aa in report.anomaly_analyses
+    )
 
 
 def generate_html_report(report: ProfilingReport) -> str:

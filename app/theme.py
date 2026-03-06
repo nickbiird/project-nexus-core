@@ -401,7 +401,7 @@ def get_custom_css() -> str:
     """
 
 
-def render_header():
+def render_header() -> str:
     """Render the branded header HTML."""
     return """
     <div class="brand-header">
@@ -411,7 +411,7 @@ def render_header():
     """
 
 
-def render_margin_leakage_header():
+def render_margin_leakage_header() -> str:
     """Render the 'Kill Shot' margin leakage section header."""
     return """
     <div class="leakage-header">
@@ -453,7 +453,9 @@ def render_health_score(score: float) -> str:
     """
 
 
-def render_finding_card(description: str, amount: float, confidence: str, rows: int, category: str) -> str:
+def render_finding_card(
+    description: str, amount: float, confidence: str, rows: int, category: str
+) -> str:
     """Render a single finding as a styled card."""
     conf_badge = {"high": "Alta", "medium": "Media", "low": "Baja"}.get(confidence, confidence)
     cat_label = {
