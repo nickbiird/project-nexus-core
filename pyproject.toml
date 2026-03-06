@@ -97,7 +97,7 @@ nexus-api = "api.main:main"
 
 [build-system]
 requires = ["setuptools>=69.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["src*", "scripts*", "dashboard*", "api*"]
