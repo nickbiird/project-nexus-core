@@ -62,9 +62,7 @@ class TestCacheHitPath:
 
         session = MagicMock()
         with (
-            patch(
-                "src.services.audit_service.AuditRepository"
-            ) as mock_repo_cls,
+            patch("src.services.audit_service.AuditRepository") as mock_repo_cls,
             patch("src.services.audit_service.profile_excel") as mock_profiler,
         ):
             mock_repo_cls.return_value.get_by_file_hash.return_value = mock_audit

@@ -44,6 +44,7 @@ class TestAlembicRoundtrip:
 
         # Clear the lru_cache so get_settings() re-reads the env var
         from src.common.config.settings import get_settings
+
         get_settings.cache_clear()
 
         try:
