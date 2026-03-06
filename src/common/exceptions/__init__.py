@@ -33,3 +33,37 @@ class ExportError(Exception):
     Subtypes cover HTML rendering errors, JSON serialisation
     failures, and file-system write errors.
     """
+
+
+# ---------------------------------------------------------------------------
+# Base exception for all Nexus-specific errors
+# ---------------------------------------------------------------------------
+
+
+class NexusError(Exception):
+    """Root exception for all Project Nexus domain errors."""
+
+
+# ---------------------------------------------------------------------------
+# Persistence domain
+# ---------------------------------------------------------------------------
+
+
+class PersistenceError(NexusError):
+    """Raised when a database operation fails.
+
+    Wraps SQLAlchemy errors with a typed contract so that callers
+    never see raw ORM exceptions.
+    """
+
+
+class PersistenceConnectionError(PersistenceError):
+    """Database connection could not be established or was lost."""
+
+
+class MigrationError(PersistenceError):
+    """A schema migration failed to apply."""
+
+
+class PersistenceIntegrityError(PersistenceError):
+    """A uniqueness or foreign-key constraint was violated."""
