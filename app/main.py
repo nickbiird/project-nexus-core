@@ -19,6 +19,22 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# ── Logging & Sentry (before any Streamlit widget) ──
+from src.common.config.settings import get_settings  # noqa: E402
+from src.common.logging import configure_logging  # noqa: E402
+
+configure_logging()
+
+_settings = get_settings()
+if _settings.sentry_dsn:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=_settings.sentry_dsn,
+        traces_sample_rate=0.1,
+        environment=_settings.app_env,
+    )
+
 from app.pages.anomaly_deepdive import render_anomaly_deepdive  # noqa: E402
 from app.pages.columns import render_columns  # noqa: E402
 from app.pages.downloads import render_downloads  # noqa: E402

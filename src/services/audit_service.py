@@ -19,12 +19,12 @@ Public functions
 from __future__ import annotations
 
 import hashlib
-import logging
 import tempfile
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 
+import structlog
 from sqlalchemy.orm import Session
 
 from src.common.exceptions import IngestionError, ProfilingError
@@ -40,7 +40,7 @@ from src.etl.profilers.excel_profiler import (
     profile_excel,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _DEFAULT_CLIENT_NAME = "Nexus Pilot Client"
 
@@ -197,7 +197,12 @@ def process_audit_upload(
 
     # ── Step 1: Hash ─────────────────────────────────────────
     file_hash = compute_file_hash(file_bytes)
-    logger.debug("File hash computed: %s...", file_hash[:8])
+    logger.info(
+        "audit.started",
+        file_name=file_name,
+        file_size_bytes=len(file_bytes),
+        file_hash=file_hash[:16],
+    )
 
     if on_progress is not None:
         on_progress(10, "Verificando caché...")
@@ -208,16 +213,21 @@ def process_audit_upload(
 
     if cached_audit is not None:
         logger.info(
-            "Cache HIT — audit_id=%s, file=%s",
-            str(cached_audit.id)[:8],
-            file_name,
+            "audit.cache_hit",
+            file_hash=file_hash[:16],
+            audit_id=str(cached_audit.id),
+            file_name=file_name,
         )
         if on_progress is not None:
             on_progress(100, "Resultado recuperado de caché.")
         return rehydrate_report(cached_audit)
 
     # ── Step 3: Cache MISS → profile ─────────────────────────
-    logger.info("Cache MISS — profiling file=%s", file_name)
+    logger.info(
+        "audit.cache_miss",
+        file_hash=file_hash[:16],
+        file_name=file_name,
+    )
 
     if on_progress is not None:
         on_progress(25, "Analizando datos...")
@@ -236,12 +246,30 @@ def process_audit_upload(
 
         report = profile_excel(tmp_path)
     except (ProfilingError, IngestionError):
+        logger.error(
+            "audit.failed",
+            file_hash=file_hash[:16],
+            file_name=file_name,
+            error_type="ProfilingError",
+        )
         raise
     except OSError as exc:
-        logger.error("I/O error during profiling: %s", exc)
+        logger.error(
+            "audit.failed",
+            file_hash=file_hash[:16],
+            file_name=file_name,
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+        )
         raise IngestionError(f"Error reading file {file_name!r}: {exc}") from exc
     except ValueError as exc:
-        logger.error("Value error during profiling: %s", exc)
+        logger.error(
+            "audit.failed",
+            file_hash=file_hash[:16],
+            file_name=file_name,
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+        )
         raise IngestionError(f"Invalid data in file {file_name!r}: {exc}") from exc
     finally:
         if tmp_path is not None:
@@ -249,9 +277,12 @@ def process_audit_upload(
                 tmp_path.unlink()
 
     logger.info(
-        "Profiling complete — file=%s, processing_seconds=%.2f",
-        file_name,
-        report.processing_time_seconds,
+        "audit.profiling_complete",
+        file_hash=file_hash[:16],
+        rows=report.total_rows,
+        columns=report.total_columns,
+        duration_seconds=report.processing_time_seconds,
+        health_score=report.data_health_score,
     )
 
     if on_progress is not None:
@@ -272,7 +303,13 @@ def process_audit_upload(
         report=report,
     )
 
-    logger.info("Audit persisted — audit_id=%s", str(saved_audit.id)[:8])
+    logger.info(
+        "audit.completed",
+        file_hash=file_hash[:16],
+        audit_id=str(saved_audit.id),
+        total_impact_eur=report.total_estimated_impact_eur,
+        health_score=report.data_health_score,
+    )
 
     if on_progress is not None:
         on_progress(100, "Completado.")

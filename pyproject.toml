@@ -62,9 +62,8 @@ dependencies = [
     "click>=8.1.7",                       # CLI framework
     "tenacity>=8.2.3",                    # Retry logic for API calls
 
-    # --- Database ---
-    "sqlalchemy>=2.0.0",
-    "alembic>=1.13.0",
+    # --- Observability ---
+    "sentry-sdk[pure_eval]>=2.0.0",       # Error tracking and performance monitoring
 ]
 
 [project.optional-dependencies]
@@ -76,6 +75,8 @@ dev = [
     "ruff>=0.2.0",
     "pre-commit>=3.6.0",
     "ipython>=8.21.0",
+    "pytest-xdist>=3.5.0",
+    "pytest-sugar>=1.0.0",
 ]
 ocr = [
     "pytesseract>=0.3.10",               # OCR for PDF invoices
@@ -144,7 +145,7 @@ check_untyped_defs = true
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
-addopts = "--strict-markers --tb=short -q"
+addopts = "--strict-markers --tb=short -q --cov-fail-under=80"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests requiring database or API access",
