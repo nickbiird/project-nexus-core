@@ -9,18 +9,18 @@ After a successful audit, pre-computed metrics are stored in
 from __future__ import annotations
 
 import time
-from pathlib import Path
 
 import streamlit as st
 
 from app.state import AppState
 from app.theme import GOLD, SLATE_LIGHT, render_header
-from src.common.exceptions import IngestionError, ProfilingError
+from src.common.exceptions import IngestionError, PersistenceError, ProfilingError
+from src.db import get_session
+from src.services.audit_service import process_audit_upload
 from src.services.demo_service import generate_demo_data
 from src.services.export_service import (
     compute_gross_revenue,
     compute_total_anomaly_count,
-    profile_excel,
 )
 
 # ──────────────────────────────────────────────────────────────
@@ -163,6 +163,9 @@ def _execute_profiling(
         file_name: Display name for the file being profiled.
     """
     import tempfile
+    from pathlib import Path
+
+    from src.services.export_service import profile_excel
 
     with st.spinner("Analizando sus datos..."):
         start = time.time()
@@ -170,6 +173,7 @@ def _execute_profiling(
 
         try:
             if file_to_profile == "demo":
+                # Demo path — does NOT go through the database
                 demo_df = state.get_demo_df()
                 if demo_df is None:
                     st.error("No hay datos de demostración cargados.")
@@ -177,44 +181,54 @@ def _execute_profiling(
                 with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
                     demo_df.to_excel(tmp.name, index=False)
                     tmp_path = Path(tmp.name)
+
+                progress.progress(30, text="Detectando esquema...")
+                report = profile_excel(tmp_path)
+                report.file_path = file_name
+                elapsed = time.time() - start
+                report.processing_time_seconds = round(elapsed, 2)
+
+                try:  # noqa: SIM105
+                    tmp_path.unlink()
+                except OSError:
+                    pass
+
             else:
-                with tempfile.NamedTemporaryFile(
-                    suffix=Path(file_name).suffix, delete=False
-                ) as tmp:
-                    tmp.write(file_to_profile.getvalue())  # type: ignore[attr-defined]
-                    tmp_path = Path(tmp.name)
+                # Real upload path — goes through audit service + database
+                file_bytes: bytes = file_to_profile.getvalue()  # type: ignore[union-attr]
 
-            progress.progress(30, text="Detectando esquema...")
+                def _progress_cb(pct: int, msg: str) -> None:
+                    progress.progress(pct, text=msg)
 
-            report = profile_excel(tmp_path)
-
-            progress.progress(90, text="Generando hallazgos...")
-
-            report.file_path = file_name
-            elapsed = time.time() - start
-            report.processing_time_seconds = round(elapsed, 2)
+                with get_session() as session:
+                    report = process_audit_upload(
+                        session,
+                        file_name,
+                        file_bytes,
+                        on_progress=_progress_cb,
+                    )
 
             state.set_report(report)
-
             progress.progress(100, text="Completado.")
             time.sleep(0.3)
             progress.empty()
 
-            try:  # noqa: SIM105
-                tmp_path.unlink()
-            except Exception:  # noqa: S110
-                pass
-
-        except (IngestionError, ProfilingError) as exc:
+        except IngestionError as exc:
             st.error(
-                f"Error al procesar el archivo: {exc}\n\n"
+                f"Error al leer el archivo: {exc}\n\n"
                 "Asegúrese de que el archivo es un Excel (.xlsx/.xls) o CSV válido."
             )
             st.stop()
-        except Exception as exc:
+        except ProfilingError as exc:
             st.error(
-                f"Error inesperado al procesar el archivo: {exc}\n\n"
-                "Asegúrese de que el archivo es un Excel (.xlsx/.xls) o CSV válido."
+                f"Error en el motor de análisis: {exc}\n\n"
+                "El archivo puede contener un formato no soportado."
+            )
+            st.stop()
+        except PersistenceError as exc:
+            st.error(
+                f"Error al guardar los resultados: {exc}\n\n"
+                "Inténtelo de nuevo. Si el problema persiste, contacte soporte."
             )
             st.stop()
 
