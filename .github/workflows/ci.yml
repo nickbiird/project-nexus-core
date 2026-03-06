@@ -81,7 +81,7 @@ jobs:
       - name: Alembic migration roundtrip
         if: matrix.python-version == '3.11'
         env:
-          DATABASE_URL: sqlite:///tmp/ci_test.db
+          DATABASE_URL: sqlite:///ci_test_database.db
         run: |
           source .venv/bin/activate
           mkdir -p data
