@@ -66,6 +66,11 @@ dependencies = [
     "rich>=13.7.0",                       # Terminal formatting
     "click>=8.1.7",                       # CLI framework
     "tenacity>=8.2.3",                    # Retry logic for API calls
+
+    # --- Database ---
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.13.0",
+    "pydantic-settings>=2.1.0",
 ]
 
 [project.optional-dependencies]
