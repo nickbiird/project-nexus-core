@@ -1,0 +1,36 @@
+# ──────────────────────────────────────────────────────────────
+# Yellowbird Telemetry — Development Compose Override
+# ──────────────────────────────────────────────────────────────
+# Usage:
+#   docker compose -f infra/docker/docker-compose.yml \
+#                  -f infra/docker/docker-compose.dev.yml up --build
+# ──────────────────────────────────────────────────────────────
+
+services:
+  db:
+    ports:
+      - "5432:5432"
+
+  app:
+    volumes:
+      - ../../src:/app/src:ro
+      - ../../app:/app/app:ro
+    command:
+      [
+        "python", "-m", "streamlit", "run", "app/main.py",
+        "--server.port=8501",
+        "--server.address=0.0.0.0",
+        "--server.runOnSave=true",
+      ]
+
+  api:
+    command:
+      [
+        "uvicorn", "api.main:app",
+        "--host", "0.0.0.0",
+        "--port", "8000",
+        "--reload",
+      ]
+    volumes:
+      - ../../api:/app/api:ro
+      - ../../src:/app/src:ro

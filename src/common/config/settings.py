@@ -55,6 +55,13 @@ class NexusSettings(BaseSettings):
 
     # --- Streamlit ---
     streamlit_server_port: int = 8501
+    max_upload_size_mb: int = 50
+
+    # --- External APIs ---
+    hunter_api_key: str = ""
+
+    # --- Observability ---
+    sentry_dsn: str = ""
 
     # --- FastAPI ---
     api_host: str = "0.0.0.0"

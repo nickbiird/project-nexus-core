@@ -1,0 +1,42 @@
+# Version control
+.git/
+.gitignore
+
+# Python bytecode
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test infrastructure
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local data and secrets
+data/
+.env
+.env.*
+!.env.example
+
+# Build and editor artifacts
+*.bak
+*.log
+.DS_Store
+.idea/
+.vscode/
+
+# Node artifacts
+node_modules/
+
+# Type checking cache
+.mypy_cache/
+
+# Documentation
+docs/

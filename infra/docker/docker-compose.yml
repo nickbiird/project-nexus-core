@@ -1,55 +1,69 @@
-version: "3.9"
+# ──────────────────────────────────────────────────────────────
+# Yellowbird Telemetry — Production Docker Compose
+# ──────────────────────────────────────────────────────────────
+# Usage: docker compose -f infra/docker/docker-compose.yml up --build
+# ──────────────────────────────────────────────────────────────
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: nexus-postgres
-    environment:
-      POSTGRES_DB: nexus_warehouse
-      POSTGRES_USER: nexus_admin
-      POSTGRES_PASSWORD: dev_password_change_me
-    ports:
-      - "5432:5432"
+  db:
+    image: postgres:16-alpine
+    env_file: ../../.env
     volumes:
-      - nexus_pgdata:/var/lib/postgresql/data
-      - ./data/schemas:/docker-entrypoint-initdb.d:ro
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nexus_admin -d nexus_warehouse"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    networks:
+      - nexus_net
 
-  dashboard:
+  app:
     build:
-      context: .
+      context: ../..
       dockerfile: infra/docker/Dockerfile
-    container_name: nexus-dashboard
-    command: streamlit run dashboard/app.py --server.port=8501 --server.address=0.0.0.0
-    ports:
-      - "8501:8501"
-    env_file: .env
+      target: runtime
+    env_file: ../../.env
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
     volumes:
-      - ./dashboard:/app/dashboard
-      - ./src:/app/src
+      - ../../data:/app/data
+    restart: unless-stopped
+    networks:
+      - nexus_net
 
   api:
     build:
-      context: .
+      context: ../..
       dockerfile: infra/docker/Dockerfile
-    container_name: nexus-api
-    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
-    ports:
-      - "8000:8000"
-    env_file: .env
+      target: runtime
+    # Routes not yet implemented — skeleton FastAPI app
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: ../../.env
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nexus_net
+
+  nginx:
+    image: nginx:1.25-alpine
     volumes:
-      - ./api:/app/api
-      - ./src:/app/src
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - app
+      - api
+    restart: unless-stopped
+    networks:
+      - nexus_net
 
 volumes:
-  nexus_pgdata:
+  postgres_data:
+
+networks:
+  nexus_net:

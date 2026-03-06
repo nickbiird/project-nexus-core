@@ -64,7 +64,7 @@ jobs:
       - name: Run unit tests
         run: |
           source .venv/bin/activate
-          pytest tests/unit/ -v --tb=short --cov=src --cov-report=xml
+          pytest tests/unit/ -v --tb=short --cov=src --cov-report=xml --cov-fail-under=80
 
       - name: Run integration tests
         if: matrix.python-version == '3.11'
@@ -73,3 +73,26 @@ jobs:
         run: |
           source .venv/bin/activate
           pytest tests/integration/ -v --tb=short -m "not llm"
+
+      - name: Docker build test
+        if: matrix.python-version == '3.11'
+        run: docker build -f infra/docker/Dockerfile --target builder --no-cache .
+
+      - name: Alembic migration roundtrip
+        if: matrix.python-version == '3.11'
+        env:
+          DATABASE_URL: sqlite:///tmp/ci_test.db
+        run: |
+          source .venv/bin/activate
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+          echo "Migration roundtrip passed"
+
+      - name: Security scan
+        if: matrix.python-version == '3.11'
+        run: |
+          source .venv/bin/activate
+          uv pip install pip-audit --quiet
+          pip-audit --strict
+
