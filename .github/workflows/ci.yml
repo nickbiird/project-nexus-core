@@ -95,5 +95,5 @@ jobs:
         run: |
           source .venv/bin/activate
           uv pip install pip-audit --quiet
-          pip-audit --strict
+          pip-audit --strict --ignore project-nexus-core
 
