@@ -70,7 +70,6 @@ dependencies = [
     # --- Database ---
     "sqlalchemy>=2.0.0",
     "alembic>=1.13.0",
-    "pydantic-settings>=2.1.0",
 ]
 
 [project.optional-dependencies]
