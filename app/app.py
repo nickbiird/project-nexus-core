@@ -11,14 +11,11 @@ Run: streamlit run app/app.py
 
 from __future__ import annotations
 
-import io
-import json
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -28,18 +25,18 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.theme import (
+from app.components.charts import (  # noqa: E402
+    PLOTLY_LAYOUT,
+    build_anomaly_scatter,
+    build_anomaly_type_bar,
+    build_waterfall_chart,
+)
+from app.theme import (  # noqa: E402
     GOLD,
-    GOLD_LIGHT,
-    NAVY,
-    NAVY_DEEP,
-    NAVY_MID,
     RED_LOSS,
     SLATE_LIGHT,
-    GREEN_GAIN,
     WHITE,
     get_custom_css,
-    health_score_color,
     render_exec_summary,
     render_finding_card,
     render_header,
@@ -47,7 +44,9 @@ from app.theme import (
     render_margin_leakage_header,
     render_total_impact,
 )
-from src.etl.profilers.excel_profiler import ProfilingReport, profile_excel
+from src.etl.profilers.excel_profiler import profile_excel  # noqa: E402
+from src.services.demo_service import generate_demo_data  # noqa: E402
+from src.services.export_service import generate_html_report  # noqa: E402
 
 # ──────────────────────────────────────────────────────────────
 # Page Config
@@ -69,409 +68,6 @@ st.markdown(get_custom_css(), unsafe_allow_html=True)
 
 MAX_FILE_SIZE_MB = 50
 MAX_ROWS_WARNING = 50_000
-
-# Plotly shared layout
-_PLOTLY_LAYOUT = dict(
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="DM Sans, sans-serif", color=WHITE),
-    margin=dict(l=40, r=40, t=50, b=40),
-)
-
-
-# ──────────────────────────────────────────────────────────────
-# Helper: Generate sample data for demo
-# ──────────────────────────────────────────────────────────────
-
-
-def generate_demo_data() -> pd.DataFrame:
-    """Generate a small synthetic logistics dataset for instant demos."""
-    np.random.seed(42)
-    n = 200
-
-    suppliers = [
-        "Transportes Garcia S.L.", "Trans. Garcia", "GARCIA SL",
-        "Transportes Martinez S.L.", "Martínez S.L.", "Martnez SL",
-        "Logística Pérez S.A.", "Logistica Perez",
-        "Iberlogística S.L.", "Mediterráneo Transport",
-    ]
-    routes = ["BCN-MAD", "BCN-VAL", "MAD-SEV", "BCN-ZAR", "MAD-BIL", "VAL-MAL"]
-    dates_fmt = [
-        lambda: f"{np.random.randint(1,28):02d}/{np.random.randint(1,12):02d}/2025",
-        lambda: f"2025-{np.random.randint(1,12):02d}-{np.random.randint(1,28):02d}",
-        lambda: f"{np.random.randint(1,12):02d}-{np.random.randint(1,28):02d}-2025",
-    ]
-
-    data = {
-        "numero_factura": [f"FAC-{i:04d}" for i in range(n)],
-        "proveedor": [suppliers[np.random.randint(0, len(suppliers))] for _ in range(n)],
-        "fecha_factura": [dates_fmt[np.random.randint(0, 3)]() for _ in range(n)],
-        "ruta": [routes[np.random.randint(0, len(routes))] for _ in range(n)],
-        "importe_total": np.round(np.random.lognormal(7.5, 0.6, n), 2).tolist(),
-        "coste_operativo": np.round(np.random.lognormal(7.3, 0.5, n), 2).tolist(),
-        "peso_kg": [
-            None if np.random.random() < 0.15 else int(np.random.uniform(500, 5000))
-            for _ in range(n)
-        ],
-    }
-
-    # Inject anomalies
-    data["importe_total"][5] = 95000.0  # High outlier
-    data["importe_total"][42] = 0.0     # Zero
-    data["importe_total"][88] = -500.0  # Negative
-    data["coste_operativo"][10] = data["importe_total"][10] + 500  # Negative margin
-
-    # Inject duplicate invoices
-    data["numero_factura"][150] = "FAC-0005"
-
-    df = pd.DataFrame(data)
-    return df
-
-
-# ──────────────────────────────────────────────────────────────
-# Helper: Build Plotly Waterfall Chart
-# ──────────────────────────────────────────────────────────────
-
-
-def build_waterfall_chart(report: ProfilingReport, gross_revenue: float) -> go.Figure:
-    """Build a 'Kill Shot' waterfall chart showing margin leakage.
-
-    Starts with Total Gross Revenue, deducts each finding category,
-    and ends with Realized Net Margin.
-    """
-    # Aggregate findings by category for cleaner display
-    category_labels = {
-        "duplicate_charges": "Duplicate Invoice Leakage",
-        "pricing_spread": "Pricing Inconsistencies",
-        "concentration_risk": "Concentration Risk Exposure",
-        "negative_margin": "Negative-Margin Transactions",
-    }
-    category_impacts: dict[str, float] = {}
-    for f in report.findings:
-        label = category_labels.get(f.category, f.category.replace("_", " ").title())
-        category_impacts[label] = category_impacts.get(label, 0) + f.estimated_eur_impact
-
-    # Build waterfall data
-    labels = ["Total Gross Revenue"]
-    values = [gross_revenue]
-    measures = ["absolute"]
-
-    for label, impact in category_impacts.items():
-        labels.append(label)
-        values.append(-abs(impact))
-        measures.append("relative")
-
-    labels.append("Realized Net Margin")
-    values.append(0)  # Plotly computes the total automatically
-    measures.append("total")
-
-    fig = go.Figure(go.Waterfall(
-        name="Margin Leakage",
-        orientation="v",
-        measure=measures,
-        x=labels,
-        y=values,
-        textposition="outside",
-        text=[f"€{abs(v):,.0f}" for v in values],
-        connector=dict(line=dict(color=SLATE_LIGHT, width=1, dash="dot")),
-        increasing=dict(marker=dict(color=GREEN_GAIN)),
-        decreasing=dict(marker=dict(color=RED_LOSS)),
-        totals=dict(marker=dict(color=GOLD)),
-    ))
-
-    fig.update_layout(
-        **_PLOTLY_LAYOUT,
-        title=None,
-        showlegend=False,
-        height=420,
-        xaxis=dict(
-            tickangle=-25,
-            tickfont=dict(size=11),
-            gridcolor="rgba(255,255,255,0.05)",
-        ),
-        yaxis=dict(
-            title="EUR (€)",
-            gridcolor="rgba(255,255,255,0.05)",
-            tickprefix="€",
-            separatethousands=True,
-        ),
-    )
-    return fig
-
-
-# ──────────────────────────────────────────────────────────────
-# Helper: Build Plotly Anomaly Scatter
-# ──────────────────────────────────────────────────────────────
-
-
-def build_anomaly_scatter(anomaly_analysis) -> go.Figure:
-    """Build an interactive scatter plot of anomalies for a column."""
-    if not anomaly_analysis.anomalies:
-        return None
-
-    type_colors = {
-        "outlier_high": RED_LOSS,
-        "outlier_low": "#F6AD55",
-        "zero_value": SLATE_LIGHT,
-        "negative": "#FC8181",
-        "duplicate_invoice": GOLD,
-    }
-    type_labels = {
-        "outlier_high": "Outlier (High)",
-        "outlier_low": "Outlier (Low)",
-        "zero_value": "Zero Value",
-        "negative": "Negative",
-        "duplicate_invoice": "Duplicate Invoice",
-    }
-
-    fig = go.Figure()
-
-    # Group anomalies by type for legend
-    by_type: dict[str, list] = {}
-    for a in anomaly_analysis.anomalies:
-        by_type.setdefault(a.anomaly_type, []).append(a)
-
-    for atype, anomalies in by_type.items():
-        fig.add_trace(go.Scatter(
-            x=[a.row_index for a in anomalies],
-            y=[a.value for a in anomalies],
-            mode="markers",
-            name=type_labels.get(atype, atype),
-            marker=dict(
-                color=type_colors.get(atype, GOLD),
-                size=10,
-                line=dict(width=1, color="rgba(255,255,255,0.3)"),
-            ),
-            hovertemplate=(
-                "<b>Row %{x}</b><br>"
-                "Value: €%{y:,.2f}<br>"
-                "<extra>%{fullData.name}</extra>"
-            ),
-        ))
-
-    # Add median reference line
-    fig.add_hline(
-        y=anomaly_analysis.median,
-        line_dash="dash",
-        line_color=GOLD,
-        annotation_text=f"Median: €{anomaly_analysis.median:,.2f}",
-        annotation_font_color=GOLD,
-    )
-
-    fig.update_layout(
-        **_PLOTLY_LAYOUT,
-        title=dict(
-            text=f"Anomalies — {anomaly_analysis.column_name}",
-            font=dict(size=14, family="DM Serif Display, Georgia, serif"),
-        ),
-        height=380,
-        xaxis=dict(
-            title="Row Index",
-            gridcolor="rgba(255,255,255,0.05)",
-        ),
-        yaxis=dict(
-            title="Value (€)",
-            gridcolor="rgba(255,255,255,0.05)",
-            tickprefix="€",
-            separatethousands=True,
-        ),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1,
-            font=dict(size=11),
-        ),
-    )
-    return fig
-
-
-def build_anomaly_type_bar(anomaly_analysis) -> go.Figure:
-    """Build a horizontal bar chart of anomaly type counts."""
-    if not anomaly_analysis.anomalies:
-        return None
-
-    type_labels = {
-        "outlier_high": "Outlier (High)",
-        "outlier_low": "Outlier (Low)",
-        "zero_value": "Zero Value",
-        "negative": "Negative",
-        "duplicate_invoice": "Duplicate Invoice",
-    }
-
-    counts: dict[str, int] = {}
-    for a in anomaly_analysis.anomalies:
-        label = type_labels.get(a.anomaly_type, a.anomaly_type)
-        counts[label] = counts.get(label, 0) + 1
-
-    sorted_items = sorted(counts.items(), key=lambda x: x[1], reverse=True)
-    labels = [item[0] for item in sorted_items]
-    values = [item[1] for item in sorted_items]
-
-    fig = go.Figure(go.Bar(
-        y=labels,
-        x=values,
-        orientation="h",
-        marker=dict(
-            color=[RED_LOSS if "Outlier" in l else (SLATE_LIGHT if "Zero" in l else GOLD) for l in labels],
-            line=dict(width=0),
-        ),
-        text=values,
-        textposition="auto",
-        textfont=dict(color=WHITE),
-    ))
-
-    fig.update_layout(
-        **_PLOTLY_LAYOUT,
-        title=dict(
-            text="Anomaly Distribution by Type",
-            font=dict(size=14, family="DM Serif Display, Georgia, serif"),
-        ),
-        height=280,
-        xaxis=dict(
-            title="Count",
-            gridcolor="rgba(255,255,255,0.05)",
-        ),
-        yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
-        showlegend=False,
-    )
-    return fig
-
-
-# ──────────────────────────────────────────────────────────────
-# Helper: Generate HTML report for download
-# ──────────────────────────────────────────────────────────────
-
-
-def generate_html_report(report: ProfilingReport) -> str:
-    """Generate a client-friendly HTML report from the profiling report."""
-    findings_html = ""
-    for f in report.findings:
-        cat_label = {
-            "duplicate_charges": "Cargos duplicados",
-            "pricing_spread": "Inconsistencia de precios",
-            "concentration_risk": "Riesgo de concentración",
-            "negative_margin": "Margen negativo",
-        }.get(f.category, f.category)
-        findings_html += f"""
-        <div style="background:#FFF5F5; border-left:3px solid #C53030; padding:1rem 1.5rem;
-                     margin-bottom:0.8rem; border-radius:0 6px 6px 0;">
-            <div style="font-family:Georgia,serif; font-size:1.3rem; color:#C53030;">
-                €{f.estimated_eur_impact:,.0f}
-            </div>
-            <div style="margin-top:0.3rem; font-size:0.9rem;">{f.description}</div>
-            <div style="color:#718096; font-size:0.78rem; margin-top:0.3rem;">
-                {cat_label} · Confianza: {f.confidence.title()} · {f.rows_affected:,} filas
-            </div>
-        </div>
-        """
-
-    columns_html = ""
-    for cp in report.column_profiles:
-        bar_color = "#2F855A" if cp.null_pct < 10 else ("#C9943E" if cp.null_pct < 30 else "#C53030")
-        columns_html += f"""
-        <tr>
-            <td style="padding:0.5rem 0.8rem; border-bottom:1px solid #EDF2F7;">{cp.name}</td>
-            <td style="padding:0.5rem 0.8rem; border-bottom:1px solid #EDF2F7;">{cp.inferred_type}</td>
-            <td style="padding:0.5rem 0.8rem; border-bottom:1px solid #EDF2F7;">
-                <div style="background:#EDF2F7; border-radius:3px; height:16px; width:100px;">
-                    <div style="background:{bar_color}; border-radius:3px; height:16px;
-                                width:{max(2, 100 - cp.null_pct)}px;"></div>
-                </div>
-                {100 - cp.null_pct:.0f}% completo
-            </td>
-        </tr>
-        """
-
-    score_color = "#2F855A" if report.data_health_score >= 80 else (
-        "#C9943E" if report.data_health_score >= 50 else "#C53030"
-    )
-
-    return f"""<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yellowbird Telemetry — Informe de Auditoría de Datos</title>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;600;700&display=swap"
-          rel="stylesheet">
-    <style>
-        body {{ font-family: 'DM Sans', sans-serif; color: #0B132B; max-width: 800px;
-               margin: 0 auto; padding: 2rem; background: #FAF7F2; }}
-        h1 {{ font-family: 'DM Serif Display', Georgia, serif; font-weight: 400; }}
-        h2 {{ font-family: 'DM Serif Display', Georgia, serif; font-weight: 400;
-              border-bottom: 1px solid #E2E8F0; padding-bottom: 0.5rem; margin-top: 2rem; }}
-        .header {{ text-align: center; padding: 2rem 0; border-bottom: 2px solid #D4AF37; margin-bottom: 2rem; }}
-        .header h1 span {{ color: #D4AF37; }}
-        .header .sub {{ color: #A0AEC0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.15em; }}
-        .score {{ text-align: center; margin: 2rem 0; }}
-        .score .number {{ font-family: 'DM Serif Display', Georgia, serif; font-size: 4rem;
-                          color: {score_color}; }}
-        .score .label {{ color: #A0AEC0; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.15em; }}
-        .summary {{ background: rgba(212,175,55,0.08); border-left: 3px solid #D4AF37;
-                    padding: 1.2rem 1.5rem; border-radius: 0 6px 6px 0; margin: 1.5rem 0;
-                    font-size: 1.05rem; line-height: 1.7; }}
-        table {{ width: 100%; border-collapse: collapse; margin: 1rem 0; }}
-        th {{ text-align: left; padding: 0.6rem 0.8rem; background: #0B132B; color: white;
-              font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }}
-        .meta {{ color: #A0AEC0; font-size: 0.78rem; margin-top: 2rem; text-align: center;
-                 border-top: 1px solid #E2E8F0; padding-top: 1rem; }}
-        .confidential {{ color: #D4AF37; font-size: 0.7rem; text-transform: uppercase;
-                        letter-spacing: 0.2em; text-align: center; margin-bottom: 1rem; }}
-    </style>
-</head>
-<body>
-    <div class="confidential">Confidencial — Preparado exclusivamente para el cliente</div>
-    <div class="header">
-        <h1>Yellowbird<span>.</span> Telemetry</h1>
-        <div class="sub">Informe de Auditoría de Calidad de Datos</div>
-    </div>
-
-    <div class="score">
-        <div class="number">{report.data_health_score:.0f}</div>
-        <div class="label">Data Health Score (0–100)</div>
-    </div>
-
-    <div class="summary">{report.to_summary_str()}</div>
-
-    <p style="color:#718096; font-size:0.85rem;">
-        Archivo: {Path(report.file_path).name} · {report.total_rows:,} filas · {report.total_columns} columnas
-        · Procesado en {report.processing_time_seconds:.1f}s
-    </p>
-
-    <h2>Hallazgos Clave</h2>
-    {findings_html if findings_html else '<p style="color:#718096;">No se detectaron hallazgos significativos.</p>'}
-
-    {"<div style='text-align:center; background:#FFF5F5; border:1px solid rgba(197,48,48,0.3); border-radius:8px; padding:1.2rem; margin:1.5rem 0;'><div style=\"font-family:Georgia,serif; font-size:2rem; color:#C53030;\">€" + f"{report.total_estimated_impact_eur:,.0f}" + "</div><div style='color:#A0AEC0; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.12em;'>Impacto anual estimado total</div></div>" if report.total_estimated_impact_eur > 0 else ""}
-
-    <h2>Estructura de Columnas Detectada</h2>
-    <table>
-        <tr><th>Columna</th><th>Tipo Detectado</th><th>Completitud</th></tr>
-        {columns_html}
-    </table>
-
-    <h2>Métricas de Calidad</h2>
-    <table>
-        <tr><th>Métrica</th><th>Valor</th></tr>
-        <tr><td style="padding:0.5rem 0.8rem; border-bottom:1px solid #EDF2F7;">Completitud</td>
-            <td style="padding:0.5rem 0.8rem; border-bottom:1px solid #EDF2F7;">{report.completeness_score:.0f}/100</td></tr>
-        <tr><td style="padding:0.5rem 0.8rem; border-bottom:1px solid #EDF2F7;">Consistencia</td>
-            <td style="padding:0.5rem 0.8rem; border-bottom:1px solid #EDF2F7;">{report.consistency_score:.0f}/100</td></tr>
-        <tr><td style="padding:0.5rem 0.8rem; border-bottom:1px solid #EDF2F7;">Unicidad</td>
-            <td style="padding:0.5rem 0.8rem; border-bottom:1px solid #EDF2F7;">{report.uniqueness_score:.0f}/100</td></tr>
-        <tr><td style="padding:0.5rem 0.8rem; border-bottom:1px solid #EDF2F7;">Tasa de nulos global</td>
-            <td style="padding:0.5rem 0.8rem; border-bottom:1px solid #EDF2F7;">{report.overall_null_pct:.1f}%</td></tr>
-        <tr><td style="padding:0.5rem 0.8rem; border-bottom:1px solid #EDF2F7;">Filas duplicadas exactas</td>
-            <td style="padding:0.5rem 0.8rem; border-bottom:1px solid #EDF2F7;">{report.exact_duplicate_rows:,}</td></tr>
-    </table>
-
-    <div class="meta">
-        Generado por Yellowbird Telemetry · {datetime.now().strftime("%d/%m/%Y %H:%M")}
-        · Este informe es confidencial y está destinado exclusivamente al propietario de los datos analizados.
-    </div>
-</body>
-</html>"""
 
 
 # ──────────────────────────────────────────────────────────────
@@ -558,7 +154,9 @@ if uploaded_file is not None:
     # Validate file size
     file_size_mb = uploaded_file.size / (1024 * 1024)
     if file_size_mb > MAX_FILE_SIZE_MB:
-        st.error(f"El archivo es demasiado grande ({file_size_mb:.1f} MB). Máximo: {MAX_FILE_SIZE_MB} MB.")
+        st.error(
+            f"El archivo es demasiado grande ({file_size_mb:.1f} MB). Máximo: {MAX_FILE_SIZE_MB} MB."
+        )
         st.stop()
     file_to_profile = uploaded_file
     file_name = uploaded_file.name
@@ -615,14 +213,14 @@ if file_to_profile is not None:
                     progress.empty()
 
                     # Clean up temp file
-                    try:
+                    try:  # noqa: SIM105
                         tmp_path.unlink()
-                    except Exception:
+                    except Exception:  # noqa: S110
                         pass
 
                 except Exception as e:
                     st.error(
-                        f"Error al procesar el archivo: {str(e)}\n\n"
+                        f"Error al procesar el archivo: {e!s}\n\n"
                         "Asegúrese de que el archivo es un Excel (.xlsx/.xls) o CSV válido."
                     )
                     st.stop()
@@ -638,13 +236,15 @@ if file_to_profile is not None:
         # SEQUENTIAL REVEAL: Tabs for Challenger Sale tension build
         # ==============================================================
 
-        tab_exec, tab_deepdive, tab_entities, tab_columns, tab_download = st.tabs([
-            "📊 Executive Summary",
-            "🔍 Anomaly Deep-Dive",
-            "👥 Entidades",
-            "📋 Columnas",
-            "⬇ Descargar",
-        ])
+        tab_exec, tab_deepdive, tab_entities, tab_columns, tab_download = st.tabs(
+            [
+                "📊 Executive Summary",
+                "🔍 Anomaly Deep-Dive",
+                "👥 Entidades",
+                "📋 Columnas",
+                "⬇ Descargar",
+            ]
+        )
 
         # ──────────────────────────────────────────────────────
         # TAB 1: Executive Summary — the "Kill Shot"
@@ -660,13 +260,11 @@ if file_to_profile is not None:
                 fin_col = report.detected_financial_columns[0]
                 # Re-load demo data or a reasonable estimate from the report
                 if st.session_state.demo_df is not None:
-                    try:
+                    try:  # noqa: SIM105
                         gross_revenue = float(
-                            pd.to_numeric(
-                                st.session_state.demo_df[fin_col], errors="coerce"
-                            ).sum()
+                            pd.to_numeric(st.session_state.demo_df[fin_col], errors="coerce").sum()
                         )
-                    except Exception:
+                    except Exception:  # noqa: S110
                         pass
                 if gross_revenue == 0:
                     # Fallback: estimate from anomaly analysis mean * rows
@@ -701,7 +299,9 @@ if file_to_profile is not None:
                 waterfall_fig = build_waterfall_chart(report, gross_revenue)
                 st.plotly_chart(waterfall_fig, use_container_width=True)
             else:
-                st.info("No se detectaron hallazgos financieros para generar el análisis de cascada.")
+                st.info(
+                    "No se detectaron hallazgos financieros para generar el análisis de cascada."
+                )
 
             st.divider()
 
@@ -729,7 +329,10 @@ if file_to_profile is not None:
             st.divider()
 
             # ── Findings Cards (detailed) ──
-            st.markdown('<div class="section-tag">Hallazgos Clave · Impacto en Euros</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="section-tag">Hallazgos Clave · Impacto en Euros</div>',
+                unsafe_allow_html=True,
+            )
 
             if report.findings:
                 for f in report.findings:
@@ -744,7 +347,9 @@ if file_to_profile is not None:
                         unsafe_allow_html=True,
                     )
 
-                st.markdown(render_total_impact(report.total_estimated_impact_eur), unsafe_allow_html=True)
+                st.markdown(
+                    render_total_impact(report.total_estimated_impact_eur), unsafe_allow_html=True
+                )
             else:
                 st.info("No se detectaron hallazgos financieros significativos en estos datos.")
 
@@ -752,7 +357,10 @@ if file_to_profile is not None:
         # TAB 2: Anomaly Deep-Dive — Interactive Plotly Charts
         # ──────────────────────────────────────────────────────
         with tab_deepdive:
-            st.markdown('<div class="section-tag">Anomalías Financieras · Exploración Interactiva</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="section-tag">Anomalías Financieras · Exploración Interactiva</div>',
+                unsafe_allow_html=True,
+            )
 
             if report.anomaly_analyses:
                 for aa in report.anomaly_analyses:
@@ -781,15 +389,17 @@ if file_to_profile is not None:
 
                         # Raw data in expander
                         with st.expander(f"Ver {len(aa.anomalies)} anomalías detectadas (tabla)"):
-                            anomaly_df = pd.DataFrame([
-                                {
-                                    "Tipo": a.anomaly_type.replace("_", " ").title(),
-                                    "Valor (€)": a.value,
-                                    "Fila": a.row_index,
-                                    "Detalle": a.context,
-                                }
-                                for a in aa.anomalies[:20]
-                            ])
+                            anomaly_df = pd.DataFrame(
+                                [
+                                    {
+                                        "Tipo": a.anomaly_type.replace("_", " ").title(),
+                                        "Valor (€)": a.value,
+                                        "Fila": a.row_index,
+                                        "Detalle": a.context,
+                                    }
+                                    for a in aa.anomalies[:20]
+                                ]
+                            )
                             st.dataframe(anomaly_df, use_container_width=True, hide_index=True)
 
                     st.divider()
@@ -800,7 +410,10 @@ if file_to_profile is not None:
         # TAB 3: Entity Analysis
         # ──────────────────────────────────────────────────────
         with tab_entities:
-            st.markdown('<div class="section-tag">Análisis de Entidades Duplicadas</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="section-tag">Análisis de Entidades Duplicadas</div>',
+                unsafe_allow_html=True,
+            )
 
             if report.entity_analyses:
                 for ea in report.entity_analyses:
@@ -814,13 +427,15 @@ if file_to_profile is not None:
                     if ea.clusters:
                         cluster_data = []
                         for c in ea.clusters[:15]:
-                            cluster_data.append({
-                                "Nombre canónico": c.canonical,
-                                "Variantes": ", ".join(c.variants[:5]),
-                                "Nº variantes": len(c.variants),
-                                "Similitud": f"{c.similarity_score:.0f}%",
-                                "Confianza": c.confidence.title(),
-                            })
+                            cluster_data.append(
+                                {
+                                    "Nombre canónico": c.canonical,
+                                    "Variantes": ", ".join(c.variants[:5]),
+                                    "Nº variantes": len(c.variants),
+                                    "Similitud": f"{c.similarity_score:.0f}%",
+                                    "Confianza": c.confidence.title(),
+                                }
+                            )
                         st.dataframe(
                             pd.DataFrame(cluster_data),
                             use_container_width=True,
@@ -834,18 +449,23 @@ if file_to_profile is not None:
         # TAB 4: Column Quality
         # ──────────────────────────────────────────────────────
         with tab_columns:
-            st.markdown('<div class="section-tag">Estructura de Columnas Detectada</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="section-tag">Estructura de Columnas Detectada</div>',
+                unsafe_allow_html=True,
+            )
 
             col_data = []
             for cp in report.column_profiles:
-                col_data.append({
-                    "Columna": cp.name,
-                    "Tipo detectado": cp.inferred_type,
-                    "% Nulos": f"{cp.null_pct:.1f}%",
-                    "Valores únicos": cp.unique_count,
-                    "Inconsistencias": cp.format_inconsistencies,
-                    "Muestra": str(cp.sample_values[:2]) if cp.sample_values else "—",
-                })
+                col_data.append(
+                    {
+                        "Columna": cp.name,
+                        "Tipo detectado": cp.inferred_type,
+                        "% Nulos": f"{cp.null_pct:.1f}%",
+                        "Valores únicos": cp.unique_count,
+                        "Inconsistencias": cp.format_inconsistencies,
+                        "Muestra": str(cp.sample_values[:2]) if cp.sample_values else "—",
+                    }
+                )
             st.dataframe(pd.DataFrame(col_data), use_container_width=True, hide_index=True)
 
             # Completeness bar chart — Plotly
@@ -853,19 +473,24 @@ if file_to_profile is not None:
             completeness_names = [cp.name for cp in report.column_profiles]
             completeness_vals = [round(100 - cp.null_pct, 1) for cp in report.column_profiles]
 
-            fig_completeness = go.Figure(go.Bar(
-                x=completeness_names,
-                y=completeness_vals,
-                marker=dict(
-                    color=[GOLD if v >= 90 else (SLATE_LIGHT if v >= 70 else RED_LOSS) for v in completeness_vals],
-                    line=dict(width=0),
-                ),
-                text=[f"{v}%" for v in completeness_vals],
-                textposition="auto",
-                textfont=dict(color=WHITE, size=10),
-            ))
+            fig_completeness = go.Figure(
+                go.Bar(
+                    x=completeness_names,
+                    y=completeness_vals,
+                    marker=dict(
+                        color=[
+                            GOLD if v >= 90 else (SLATE_LIGHT if v >= 70 else RED_LOSS)
+                            for v in completeness_vals
+                        ],
+                        line=dict(width=0),
+                    ),
+                    text=[f"{v}%" for v in completeness_vals],
+                    textposition="auto",
+                    textfont=dict(color=WHITE, size=10),
+                )
+            )
             fig_completeness.update_layout(
-                **_PLOTLY_LAYOUT,
+                **PLOTLY_LAYOUT,
                 height=320,
                 yaxis=dict(
                     title="Completitud (%)",
@@ -882,7 +507,9 @@ if file_to_profile is not None:
             with kc1:
                 st.markdown(f"**Entidades:** {', '.join(report.detected_entity_columns) or '—'}")
             with kc2:
-                st.markdown(f"**Financieras:** {', '.join(report.detected_financial_columns) or '—'}")
+                st.markdown(
+                    f"**Financieras:** {', '.join(report.detected_financial_columns) or '—'}"
+                )
             with kc3:
                 st.markdown(f"**Fechas:** {', '.join(report.detected_date_columns) or '—'}")
 
@@ -917,7 +544,8 @@ if file_to_profile is not None:
 
 else:
     # ── Landing state: no file uploaded ──
-    st.markdown("""
+    st.markdown(
+        """
     <div style="text-align:center; padding:3rem 1rem;">
         <p style="font-size:1.1rem; color:rgba(255,255,255,0.75); max-width:500px; margin:0 auto 1.5rem;">
             Suba un archivo Excel o CSV con sus datos operativos.
@@ -927,7 +555,9 @@ else:
             O pulse <strong>Generar datos de ejemplo</strong> en la barra lateral para una demostración instantánea.
         </p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     st.markdown(
         '<p class="trust-text">'
