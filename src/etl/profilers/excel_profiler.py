@@ -146,6 +146,7 @@ class ProfilingReport:
     # Section 5: Financial Quick-Wins
     findings: list[Finding]
     total_estimated_impact_eur: float
+    total_gross_revenue: float = 0.0
 
     def to_json(self) -> str:
         """Serialize to JSON for Streamlit consumption."""
@@ -425,10 +426,16 @@ def _detect_date_format_inconsistencies(series: pd.Series) -> int:
     return max(0, len(formats_seen) - 1)
 
 
+_IDENTIFIER_NAME_KEYWORDS = ("factura", "id", "codigo", "num", "ref", "folio", "pedido")
+
+
 def infer_column_type(col_name: str, series: pd.Series) -> str:
     """Infer the semantic type of a column."""
     if _is_date_column(col_name, series):
         return "date"
+    # Name-guard: identifier columns must never fall through to financial/numeric
+    if any(kw in col_name.lower() for kw in _IDENTIFIER_NAME_KEYWORDS):
+        return "identifier"
     if pd.api.types.is_numeric_dtype(series):
         if _is_financial_column(col_name, series):
             return "financial"
@@ -1079,6 +1086,32 @@ def profile_excel(path: Path) -> ProfilingReport:
     )
     total_impact = sum(f.estimated_eur_impact for f in findings)
 
+    # Revenue Baseline — clean sum of the highest-grossing financial column
+    total_gross_revenue = 0.0
+    if financial_columns:
+        # Build outlier-flagged row indices per column from anomaly results
+        outlier_rows: dict[str, set[int]] = {}
+        for aa in anomaly_analyses:
+            flagged: set[int] = set()
+            for a in aa.anomalies:
+                if a.anomaly_type.startswith("outlier"):
+                    flagged.add(a.row_index)
+            outlier_rows[aa.column_name] = flagged
+
+        best_sum = 0.0
+        for col in financial_columns:
+            if col not in df.columns:
+                continue
+            numeric = _coerce_to_numeric(df[col])
+            flagged_indices = outlier_rows.get(col, set())
+            clean = numeric.dropna()
+            clean = clean[clean > 0]
+            clean = clean[~clean.index.isin(flagged_indices)]
+            col_sum = float(clean.sum())
+            if col_sum > best_sum:
+                best_sum = col_sum
+        total_gross_revenue = round(best_sum, 2)
+
     processing_time = time.time() - start_time
 
     return ProfilingReport(
@@ -1103,6 +1136,7 @@ def profile_excel(path: Path) -> ProfilingReport:
         anomaly_analyses=anomaly_analyses,
         findings=findings,
         total_estimated_impact_eur=round(total_impact, 2),
+        total_gross_revenue=total_gross_revenue,
     )
 
 

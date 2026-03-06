@@ -19,7 +19,6 @@ from src.db import get_session
 from src.services.audit_service import process_audit_upload
 from src.services.demo_service import generate_demo_data
 from src.services.export_service import (
-    compute_gross_revenue,
     compute_total_anomaly_count,
 )
 
@@ -138,7 +137,7 @@ def render_sidebar(state: AppState) -> None:
             # Store pre-computed metrics for tab renderers
             report = state.get_report()
             if report is not None:
-                state.set_gross_revenue(compute_gross_revenue(report, state.get_demo_df()))
+                state.set_gross_revenue(report.total_gross_revenue)
                 state.set_total_anomaly_count(compute_total_anomaly_count(report))
     else:
         _render_landing()
