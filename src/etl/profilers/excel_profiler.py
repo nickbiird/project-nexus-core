@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import string
 import sys
 import time
 from collections import defaultdict
@@ -406,24 +407,44 @@ def _detect_eu_decimal_format(series: pd.Series) -> int:
 
 
 def _detect_date_format_inconsistencies(series: pd.Series) -> int:
-    """Count rows with inconsistent date formats in a date column."""
+    """Count rows with inconsistent date formats in a date column.
+
+    Determines the majority format by vote, then counts every row
+    whose format deviates from that majority.
+    """
     if series.dtype != object:
         return 0
-    formats_seen: set[str] = set()
+
+    format_counts: dict[str, int] = defaultdict(int)
+    row_formats: list[str | None] = []
     sample = series.dropna().head(500)
+
     for val in sample:
         val_str = str(val).strip()
+        fmt: str | None = None
         if "/" in val_str:
             parts = val_str.split("/")
             if len(parts) == 3:
-                fmt = f"{len(parts[0])}{'/' if '/' in val_str else '-'}{len(parts[1])}/{len(parts[2])}"
-                formats_seen.add(fmt)
+                fmt = f"{len(parts[0])}/{len(parts[1])}/{len(parts[2])}"
         elif "-" in val_str and not val_str.startswith("-"):
             parts = val_str.split("-")
             if len(parts) == 3:
                 fmt = f"{len(parts[0])}-{len(parts[1])}-{len(parts[2])}"
-                formats_seen.add(fmt)
-    return max(0, len(formats_seen) - 1)
+        row_formats.append(fmt)
+        if fmt is not None:
+            format_counts[fmt] += 1
+
+    if not format_counts:
+        return 0
+
+    majority_format = max(format_counts, key=lambda k: format_counts[k])
+
+    inconsistent_count = 0
+    for fmt in row_formats:
+        if fmt is not None and fmt != majority_format:
+            inconsistent_count += 1
+
+    return inconsistent_count
 
 
 _IDENTIFIER_NAME_KEYWORDS = ("factura", "id", "codigo", "num", "ref", "folio", "pedido")
@@ -569,17 +590,63 @@ def compute_uniqueness_score(df: pd.DataFrame) -> tuple[float, int, int]:
     return score, exact_dups, near_dups
 
 
-def compute_health_score(completeness: float, consistency: float, uniqueness: float) -> float:
+OUTLIER_PENALTY_POINTS: float = 2.0
+ENTITY_CLUSTER_PENALTY_POINTS: float = 2.0
+
+
+def compute_health_score(
+    completeness: float,
+    consistency: float,
+    uniqueness: float,
+    anomaly_analyses: list[AnomalyAnalysis] | None = None,
+    entity_analyses: list[EntityAnalysis] | None = None,
+) -> float:
     """
     Weighted composite Data Health Score (0–100).
     Weights: completeness 40%, consistency 30%, uniqueness 30%.
+    Penalised by financial anomalies and entity duplicates.
     """
-    return round(completeness * 0.4 + consistency * 0.3 + uniqueness * 0.3, 1)
+    structural = completeness * 0.4 + consistency * 0.3 + uniqueness * 0.3
+
+    penalty = 0.0
+    if anomaly_analyses is not None:
+        for aa in anomaly_analyses:
+            penalty += (
+                aa.outlier_count + aa.zero_count + aa.negative_count
+            ) * OUTLIER_PENALTY_POINTS
+    if entity_analyses is not None:
+        for ea in entity_analyses:
+            qualifying = sum(1 for c in ea.clusters if len(c.variants) >= 2)
+            penalty += qualifying * ENTITY_CLUSTER_PENALTY_POINTS
+
+    return max(0.0, round(structural - penalty, 1))
 
 
 # ──────────────────────────────────────────────────────────────
 # Entity Analysis (Section 3) — rapidfuzz clustering
 # ──────────────────────────────────────────────────────────────
+
+
+# Spanish legal entity suffixes to strip before entity similarity scoring
+SPANISH_LEGAL_SUFFIXES = ("sl", "sa", "slu", "slne", "sll", "scoop", "coop")
+
+
+def _normalize_entity(value: str) -> str:
+    """Normalise an entity name for similarity comparison.
+
+    Pipeline:
+    1. Lowercase and strip whitespace.
+    2. Remove all punctuation.
+    3. Strip one trailing Spanish legal suffix (whole-word only).
+    4. Strip whitespace again.
+    """
+    result = value.lower().strip()
+    result = result.translate(str.maketrans("", "", string.punctuation))
+    for suffix in SPANISH_LEGAL_SUFFIXES:
+        if result.endswith(" " + suffix) or result == suffix:
+            result = result[: -len(suffix)]
+            break
+    return result.strip()
 
 
 def cluster_entities(
@@ -606,6 +673,9 @@ def cluster_entities(
     if len(unique_values) <= 1:
         return []
 
+    # Pre-compute normalised forms for similarity scoring
+    normalised = [_normalize_entity(v) for v in unique_values]
+
     # Build clusters using greedy approach
     assigned: set[int] = set()
     clusters: list[EntityCluster] = []
@@ -622,7 +692,7 @@ def cluster_entities(
         for j, val_j in enumerate(unique_values):
             if j in assigned or j == i:
                 continue
-            score = fuzz.token_sort_ratio(val_i.lower(), val_j.lower())
+            score = fuzz.token_sort_ratio(normalised[i], normalised[j])
             if score >= threshold:
                 cluster_members.append(val_j)
                 scores.append(score)
@@ -1067,7 +1137,6 @@ def profile_excel(path: Path) -> ProfilingReport:
     completeness = compute_completeness_score(df)
     consistency = compute_consistency_score(column_profiles)
     uniqueness, exact_dups, near_dups = compute_uniqueness_score(df)
-    health_score = compute_health_score(completeness, consistency, uniqueness)
 
     overall_null = 0.0
     total_cells = df.shape[0] * df.shape[1]
@@ -1079,6 +1148,15 @@ def profile_excel(path: Path) -> ProfilingReport:
 
     # Section 4: Anomaly Detection
     anomaly_analyses = detect_anomalies(df, financial_columns)
+
+    # Health score — computed after entity and anomaly analyses for penalty deductions
+    health_score = compute_health_score(
+        completeness,
+        consistency,
+        uniqueness,
+        anomaly_analyses=anomaly_analyses,
+        entity_analyses=entity_analyses,
+    )
 
     # Section 5: Financial Quick-Wins
     findings = generate_findings(
